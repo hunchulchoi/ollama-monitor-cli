@@ -2,7 +2,7 @@
 
 A high-performance, real-time TUI (Terminal User Interface) dashboard for monitoring your local [Ollama](https://ollama.com/) server. Built with Go and Bubble Tea.
 
-![Ollama Monitor](https://raw.githubusercontent.com/hunchulchoi/ollama-monitor-cli/main/docs/assets/screenshot.png) *(Placeholder for screenshot)*
+![Ollama Monitor](docs/assets/screenshot.png)
 
 ## ✨ Features
 
