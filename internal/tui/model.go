@@ -3,7 +3,7 @@ package tui
 import (
 	"bufio"
 	"fmt"
-	"ollama-monitor/internal/ollama"
+	"github.com/hunchulchoi/ollama-monitor-cli/internal/ollama"
 	"os"
 	"path/filepath"
 	"runtime"

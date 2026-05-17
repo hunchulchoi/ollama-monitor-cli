@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"ollama-monitor/internal/ollama"
-	"ollama-monitor/internal/tui"
+	"github.com/hunchulchoi/ollama-monitor-cli/internal/ollama"
+	"github.com/hunchulchoi/ollama-monitor-cli/internal/tui"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
