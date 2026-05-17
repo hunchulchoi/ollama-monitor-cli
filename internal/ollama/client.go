@@ -7,17 +7,33 @@ import (
 
 type Client struct {
 	BaseURL string
+	APIKey  string
 }
 
 type ModelPSResponse struct {
 	Models []struct {
 		Name string `json:"name"`
 		Size int64  `json:"size"`
+		Details struct {
+			ParameterSize string `json:"parameter_size"`
+		} `json:"details"`
+		ExpiresAt     string `json:"expires_at"`
+		SizeVRAM      int64  `json:"size_vram"`
+		ContextLength int    `json:"context_length"`
 	} `json:"models"`
 }
 
 func (c *Client) GetRunningModels() (*ModelPSResponse, error) {
-	resp, err := http.Get(c.BaseURL + "/api/ps")
+	req, err := http.NewRequest("GET", c.BaseURL+"/api/ps", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.APIKey)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

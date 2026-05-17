@@ -63,7 +63,11 @@ func (m Model) Init() tea.Cmd {
 func (m Model) tailLogFile(name string) tea.Cmd {
 	return func() tea.Msg {
 		var logPath string
-		if runtime.GOOS == "windows" {
+		customLogDir := os.Getenv("OLLAMA_LOG_DIR")
+
+		if customLogDir != "" {
+			logPath = filepath.Join(customLogDir, name)
+		} else if runtime.GOOS == "windows" {
 			localAppData := os.Getenv("LOCALAPPDATA")
 			logPath = filepath.Join(localAppData, "Ollama", name)
 		} else {
