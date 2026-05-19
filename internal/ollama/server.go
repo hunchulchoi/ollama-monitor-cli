@@ -59,7 +59,7 @@ func RestartOllama(debug bool) error {
 	
 	// Add our specific settings at the end
 	if debug {
-		newEnv = append(newEnv, "OLLAMA_DEBUG=2")
+		newEnv = append(newEnv, "OLLAMA_DEBUG=1")
 	}
 	cmd.Env = newEnv
 
