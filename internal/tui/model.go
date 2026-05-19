@@ -17,6 +17,8 @@ type TickMsg time.Time
 type LogMsg struct {
 	fileName string
 	content  string
+	offset   int64
+	err      error
 }
 
 func doTick() tea.Cmd {
@@ -42,25 +44,29 @@ type Model struct {
 	Stats         *ollama.ProcessStats
 	CPUHistory    []float64
 	MemHistory    []float64
+	DebugMode     bool
+	EvalTokens    []float64 // Generated tokens per request
+	TPSHistory    []float64 // Tokens Per Second
 	width         int
 	height        int
 }
 
-func NewModel(client *ollama.Client) Model {
+func NewModel(client *ollama.Client, debugMode bool) Model {
 	return Model{
-		client: client,
+		client:    client,
+		DebugMode: debugMode,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		doTick(),
-		m.tailLogFile("server.log"),
-		m.tailLogFile("app.log"),
+		m.tailLogFile("server.log", -1),
+		m.tailLogFile("app.log", -1),
 	)
 }
 
-func (m Model) tailLogFile(name string) tea.Cmd {
+func (m Model) tailLogFile(name string, offset int64) tea.Cmd {
 	return func() tea.Msg {
 		var logPath string
 		customLogDir := os.Getenv("OLLAMA_LOG_DIR")
@@ -77,28 +83,46 @@ func (m Model) tailLogFile(name string) tea.Cmd {
 
 		file, err := os.Open(logPath)
 		if err != nil {
-			return LogMsg{fileName: name, content: "Error opening " + name + ": " + err.Error()}
+			time.Sleep(2 * time.Second)
+			return LogMsg{fileName: name, content: "", offset: -1, err: err}
 		}
+		defer file.Close()
 		
-		// Move to end of file
-		file.Seek(0, 2)
-		reader := bufio.NewReader(file)
-		for {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				time.Sleep(200 * time.Millisecond)
-				continue
-			}
-			return LogMsg{fileName: name, content: line}
+		info, err := file.Stat()
+		if err != nil {
+			time.Sleep(1 * time.Second)
+			return LogMsg{fileName: name, content: "", offset: offset}
 		}
+
+		if offset == -1 || info.Size() < offset {
+			offset, _ = file.Seek(0, 2)
+		} else {
+			file.Seek(offset, 0)
+		}
+
+		reader := bufio.NewReader(file)
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			time.Sleep(200 * time.Millisecond)
+			return LogMsg{fileName: name, content: "", offset: offset}
+		}
+
+		return LogMsg{fileName: name, content: line, offset: offset + int64(len(line))}
 	}
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if msg.String() == "q" || msg.String() == "ctrl+c" {
+		switch msg.String() {
+		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "d", "D":
+			m.DebugMode = !m.DebugMode
+			m.EvalTokens = nil
+			m.TPSHistory = nil
+			// Restart Ollama in background
+			go ollama.RestartOllama(m.DebugMode)
 		}
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -153,26 +177,50 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, doTick()
 	case LogMsg:
+		if msg.err != nil || msg.content == "" {
+			return m, m.tailLogFile(msg.fileName, msg.offset)
+		}
+
 		entry := ollama.ParseLine(msg.content)
 		if entry != nil {
-			if entry.RequestID != "" {
-				m.Requests = append(m.Requests, entry)
-				if len(m.Requests) > 8 {
-					m.Requests = m.Requests[len(m.Requests)-8:]
-				}
-				if entry.ResponseTime > 0 {
-					m.Latencies = append(m.Latencies, float64(entry.ResponseTime.Milliseconds()))
-				}
-			} else {
-				m.Logs = append(m.Logs, entry)
-				if len(m.Logs) > 15 {
-					m.Logs = m.Logs[len(m.Logs)-15:]
+			m.handleLogEntry(entry)
+		}
+		return m, m.tailLogFile(msg.fileName, msg.offset)
+	}
+	return m, nil
+}
+
+func (m *Model) handleLogEntry(entry *ollama.LogEntry) {
+	if entry.RequestID != "" {
+		m.Requests = append(m.Requests, entry)
+		if len(m.Requests) > 8 {
+			m.Requests = m.Requests[len(m.Requests)-8:]
+		}
+		if entry.ResponseTime > 0 {
+			m.Latencies = append(m.Latencies, float64(entry.ResponseTime.Milliseconds()))
+		}
+	} else {
+		m.Logs = append(m.Logs, entry)
+		if len(m.Logs) > 15 {
+			m.Logs = m.Logs[len(m.Logs)-15:]
+		}
+
+		// If it's a "finish generation" message with debug metrics
+		if entry.EvalCount > 0 {
+			m.EvalTokens = append(m.EvalTokens, float64(entry.EvalCount))
+			if len(m.EvalTokens) > 50 {
+				m.EvalTokens = m.EvalTokens[len(m.EvalTokens)-50:]
+			}
+
+			if entry.EvalDuration > 0 {
+				tps := float64(entry.EvalCount) / entry.EvalDuration.Seconds()
+				m.TPSHistory = append(m.TPSHistory, tps)
+				if len(m.TPSHistory) > 50 {
+					m.TPSHistory = m.TPSHistory[len(m.TPSHistory)-50:]
 				}
 			}
 		}
-		return m, m.tailLogFile(msg.fileName)
 	}
-	return m, nil
 }
 
 func (m Model) View() string {
@@ -187,56 +235,86 @@ func (m Model) View() string {
 	if m.Stats != nil {
 		header += fmt.Sprintf(" | CPU: %.1f%% | MEM: %.1fGB", m.Stats.CPU, m.Stats.Memory/(1024*1024*1024))
 	}
-	header += "\n"
-	
+	if m.DebugMode {
+		header += " | " + ErrorStyle.Bold(true).Render("DEBUG ON")
+	}
+
 	// Models Section
 	modelsView := HeaderStyle.Render(" 📦 RUNNING MODELS") + "\n"
 	if len(m.RunningModels) == 0 {
-		modelsView += "  - None\n"
+		modelsView += "  - None"
 	} else {
-		for _, info := range m.RunningModels {
-			modelsView += fmt.Sprintf("  %-20s %-8s %-12s %-12s %s\n",
+		for i, info := range m.RunningModels {
+			modelsView += fmt.Sprintf("  %-20s %-8s %-12s %-12s %s",
 				info.Name, info.Size, info.VRAM, info.ContextLength, info.TTL)
+			if i < len(m.RunningModels)-1 {
+				modelsView += "\n"
+			}
 		}
 	}
-	
+
+	// Debug Metrics Section (Conditional)
+	var debugMetricsView string
+	if m.DebugMode {
+		debugMetricsView = HeaderStyle.Render(" 🎯 DEBUG METRICS (Tokens & Speed)") + "\n"
+		sparkWidth := (contentWidth - 16) / 2
+		if sparkWidth < 5 {
+			sparkWidth = 5
+		}
+		tokenSpark := RenderSparkline(m.EvalTokens, sparkWidth, 10.0)
+		tpsSpark := RenderSparkline(m.TPSHistory, sparkWidth, 5.0)
+
+		debugMetricsView += fmt.Sprintf("  TOKENS: %-*s  TPS: %-*s", sparkWidth, tokenSpark, sparkWidth, tpsSpark)
+	}
+
 	// Performance Section
 	performanceView := LatencyStyle.Render(" ⚡ PERFORMANCE (Latency Flow)") + "\n"
-	sparkline := RenderSparkline(m.Latencies, contentWidth-4)
+	sparkline := RenderSparkline(m.Latencies, contentWidth-4, 1000.0) // Floor at 1s (1000ms)
 	if sparkline == "No data" {
-		performanceView += "  No data yet...\n"
+		performanceView += "  No data yet..."
 	} else {
-		performanceView += "  " + sparkline + "\n"
+		performanceView += "  " + sparkline
 	}
 
 	// Resources Section
 	resourcesView := LatencyStyle.Render(" 📊 RESOURCE USAGE (History)") + "\n"
-	cpuSpark := RenderSparkline(m.CPUHistory, (contentWidth/2)-6)
-	memSpark := RenderSparkline(m.MemHistory, (contentWidth/2)-6)
-	
-	resourcesView += fmt.Sprintf("  CPU: %-25s  MEM: %-25s\n", cpuSpark, memSpark)
-	
+
+	// Calculate dynamic width for sparklines to prevent overflow
+	// Total available = contentWidth. We have labels "  CPU: " (7) and "  MEM: " (7)
+	sparkWidth := (contentWidth - 16) / 2
+	if sparkWidth < 5 {
+		sparkWidth = 5
+	}
+
+	cpuSpark := RenderSparkline(m.CPUHistory, sparkWidth, 1.0)           // Floor at 1% CPU
+	memSpark := RenderSparkline(m.MemHistory, sparkWidth, 1024*1024*1024) // Floor at 1GB RAM
+
+	resourcesView += fmt.Sprintf("  CPU: %-*s  MEM: %-*s", sparkWidth, cpuSpark, sparkWidth, memSpark)
+
 	// Requests Section
 	requestsView := HeaderStyle.Render(" 🔄 RECENT REQUESTS") + "\n"
 	if len(m.Requests) == 0 {
-		requestsView += "  No requests yet...\n"
+		requestsView += "  No requests yet..."
 	} else {
-		for _, req := range m.Requests {
+		for i, req := range m.Requests {
 			idShort := req.RequestID
 			if len(idShort) > 8 {
 				idShort = ".." + idShort[len(idShort)-8:]
 			}
-			requestsView += fmt.Sprintf("  ID: %s | %s | %s | %s | %s\n", 
+			requestsView += fmt.Sprintf("  ID: %s | %s | %s | %s | %s",
 				idShort, req.Method, req.Path, req.Status, req.ResponseTime.String())
+			if i < len(m.Requests)-1 {
+				requestsView += "\n"
+			}
 		}
 	}
-	
+
 	// Logs Section
 	logsView := HeaderStyle.Render(" 📜 SERVER LOGS") + "\n"
 	if len(m.Logs) == 0 {
-		logsView += "  No logs yet...\n"
+		logsView += "  No logs yet..."
 	} else {
-		for _, log := range m.Logs {
+		for i, log := range m.Logs {
 			level := log.Level
 			style := InfoStyle
 			if level == "WARN" {
@@ -249,16 +327,29 @@ func (m Model) View() string {
 				msg = msg[:contentWidth-28] + "..."
 			}
 			timeStr := log.Time.Format("15:04:05")
-			logsView += "  " + TimeStyle.Render(timeStr) + " " + style.Render(level) + " | " + msg + "\n"
+			logsView += "  " + TimeStyle.Render(timeStr) + " " + style.Render(level) + " | " + msg
+			if i < len(m.Logs)-1 {
+				logsView += "\n"
+			}
 		}
 	}
-	
-	return lipgloss.JoinVertical(lipgloss.Left, 
-		header, 
-		boxStyle.Render(modelsView), 
+
+	footer := TimeStyle.Render(" [q] Quit | [d] Toggle Debug Mode (Restarts Ollama)")
+
+	views := []string{
+		header,
+		boxStyle.Render(modelsView),
+	}
+	if m.DebugMode {
+		views = append(views, boxStyle.Render(debugMetricsView))
+	}
+	views = append(views,
 		boxStyle.Render(performanceView),
 		boxStyle.Render(resourcesView),
 		boxStyle.Render(requestsView),
 		boxStyle.Render(logsView),
+		footer,
 	)
+
+	return lipgloss.JoinVertical(lipgloss.Left, views...)
 }

@@ -1,6 +1,7 @@
 package ollama
 
 import (
+	"os"
 	"strings"
 
 	"github.com/shirou/gopsutil/v3/process"
@@ -17,13 +18,21 @@ func GetProcessStats() (*ProcessStats, error) {
 		return nil, err
 	}
 
+	myPid := int32(os.Getpid())
+
 	for _, p := range procs {
+		if p.Pid == myPid {
+			continue
+		}
+
 		name, err := p.Name()
 		if err != nil {
 			continue
 		}
 
-		if strings.Contains(strings.ToLower(name), "ollama") {
+		lowerName := strings.ToLower(name)
+		// Match 'ollama' but exclude our own binary name 'ollama-monitor'
+		if strings.Contains(lowerName, "ollama") && !strings.Contains(lowerName, "monitor") {
 			cpu, _ := p.CPUPercent()
 			mem, _ := p.MemoryInfo()
 			
