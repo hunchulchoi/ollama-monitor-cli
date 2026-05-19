@@ -301,8 +301,9 @@ func (m Model) View() string {
 			if len(idShort) > 8 {
 				idShort = ".." + idShort[len(idShort)-8:]
 			}
-			requestsView += fmt.Sprintf("  ID: %s | %s | %s | %s | %s",
-				idShort, req.Method, req.Path, req.Status, req.ResponseTime.String())
+			timeStr := req.Time.Format("15:04:05")
+			requestsView += fmt.Sprintf("  %s | ID: %s | %s | %s | %s | %s",
+				TimeStyle.Render(timeStr), idShort, req.Method, req.Path, req.Status, req.ResponseTime.String())
 			if i < len(m.Requests)-1 {
 				requestsView += "\n"
 			}
