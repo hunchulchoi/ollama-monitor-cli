@@ -14,6 +14,7 @@ import (
 )
 
 type TickMsg time.Time
+type ShutdownTimerMsg time.Time
 type LogMsg struct {
 	fileName string
 	content  string
@@ -27,6 +28,12 @@ func doTick() tea.Cmd {
 	})
 }
 
+func doShutdownTick() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return ShutdownTimerMsg(t)
+	})
+}
+
 type RunningModelInfo struct {
 	Name          string
 	Size          string
@@ -36,19 +43,23 @@ type RunningModelInfo struct {
 }
 
 type Model struct {
-	client        *ollama.Client
-	RunningModels []RunningModelInfo
-	Logs          []*ollama.LogEntry
-	Requests      []*ollama.LogEntry
-	Latencies     []float64
-	Stats         *ollama.ProcessStats
-	CPUHistory    []float64
-	MemHistory    []float64
-	DebugMode     bool
-	EvalTokens    []float64 // Generated tokens per request
-	TPSHistory    []float64 // Tokens Per Second
-	width         int
-	height        int
+	client           *ollama.Client
+	RunningModels    []RunningModelInfo
+	Logs             []*ollama.LogEntry
+	Requests         []*ollama.LogEntry
+	Latencies        []float64
+	Stats            *ollama.ProcessStats
+	CPUHistory       []float64
+	MemHistory       []float64
+	DebugMode        bool
+	EvalTokens       []float64 // Generated tokens per request
+	TPSHistory       []float64 // Tokens Per Second
+	width            int
+	height           int
+	ShutdownPending  bool
+	ShutdownActive   bool
+	ShutdownTime     time.Time
+	ShutdownDuration time.Duration
 }
 
 func NewModel(client *ollama.Client, debugMode bool) Model {
@@ -114,6 +125,20 @@ func (m Model) tailLogFile(name string, offset int64) tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.ShutdownPending {
+			switch msg.String() {
+			case "y", "Y":
+				m.ShutdownPending = false
+				m.ShutdownActive = true
+				m.ShutdownDuration = 10 * time.Minute
+				m.ShutdownTime = time.Now().Add(m.ShutdownDuration)
+				return m, doShutdownTick()
+			default:
+				m.ShutdownPending = false
+				return m, nil
+			}
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -123,6 +148,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.TPSHistory = nil
 			// Restart Ollama in background
 			go ollama.RestartOllama(m.DebugMode)
+		case "s", "S":
+			if !m.ShutdownActive {
+				m.ShutdownPending = true
+			} else {
+				// Cancel shutdown
+				m.ShutdownActive = false
+			}
 		}
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -144,8 +176,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						diff := time.Until(exp)
 						if diff > 0 {
 							ttl = fmt.Sprintf("[%dm]", int(diff.Minutes()))
-						} else {
-							ttl = "[Expired]"
 						}
 					}
 				}
@@ -153,8 +183,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				models = append(models, RunningModelInfo{
 					Name:          mod.Name,
 					Size:          fmt.Sprintf("%.1fGB", float64(mod.Size)/(1024*1024*1024)),
-					VRAM:          "VRAM: " + vramPercent,
-					ContextLength: fmt.Sprintf("CTX: %dk", mod.ContextLength/1024),
+					VRAM:          vramPercent,
+					ContextLength: fmt.Sprintf("%d", mod.ContextLength),
 					TTL:           ttl,
 				})
 			}
@@ -176,6 +206,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return m, doTick()
+	case ShutdownTimerMsg:
+		if !m.ShutdownActive {
+			return m, nil
+		}
+		m.ShutdownDuration = time.Until(m.ShutdownTime)
+		if m.ShutdownDuration <= 0 {
+			return m, tea.Quit
+		}
+		return m, doShutdownTick()
 	case LogMsg:
 		if msg.err != nil || msg.content == "" {
 			return m, m.tailLogFile(msg.fileName, msg.offset)
@@ -237,6 +276,11 @@ func (m Model) View() string {
 	}
 	if m.DebugMode {
 		header += " | " + ErrorStyle.Bold(true).Render("DEBUG ON")
+	}
+	if m.ShutdownActive {
+		minutes := int(m.ShutdownDuration.Minutes())
+		seconds := int(m.ShutdownDuration.Seconds()) % 60
+		header += fmt.Sprintf(" | " + ErrorStyle.Bold(true).Render("SHUTDOWN IN %02d:%02d"), minutes, seconds)
 	}
 
 	// Models Section
@@ -324,7 +368,7 @@ func (m Model) View() string {
 				style = ErrorStyle
 			}
 			msg := log.Msg
-			if len(msg) > contentWidth-25 {
+			if len(msg) > contentWidth-28 {
 				msg = msg[:contentWidth-28] + "..."
 			}
 			timeStr := log.Time.Format("15:04:05")
@@ -335,7 +379,13 @@ func (m Model) View() string {
 		}
 	}
 
-	footer := TimeStyle.Render(" [q] Quit | [d] Toggle Debug Mode (Restarts Ollama)")
+	footerText := " [q] Quit | [d] Toggle Debug | [s] Shutdown Timer"
+	if m.ShutdownPending {
+		footerText = ErrorStyle.Bold(true).Render(" 🚨 Shutdown in 10 mins? [y] Yes / [any] No ")
+	} else if m.ShutdownActive {
+		footerText = ErrorStyle.Bold(true).Render(" 🚨 Shutdown Timer Active (Press [s] to cancel) ")
+	}
+	footer := TimeStyle.Render(footerText)
 
 	views := []string{
 		header,
