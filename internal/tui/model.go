@@ -416,7 +416,24 @@ func (m *Model) renderDebugMetrics(boxStyle lipgloss.Style, contentWidth int, is
 }
 
 func (m *Model) renderPerformance(boxStyle lipgloss.Style, contentWidth int, isFullMode bool) string {
-	performanceView := LatencyStyle.Render(" ⚡ PERFORMANCE (Latency Flow)") + "\n"
+	latestStats := ""
+	if len(m.Requests) > 0 {
+		lastReq := m.Requests[len(m.Requests)-1]
+		totalDuration := lastReq.TotalDuration
+		if totalDuration == 0 && lastReq.ResponseTime > 0 {
+			totalDuration = lastReq.ResponseTime
+		}
+		if lastReq.EvalCount > 0 || totalDuration > 0 {
+			latestStats = fmt.Sprintf(" [Latest: eval_count: %d | total_duration: %s]", lastReq.EvalCount, totalDuration.String())
+		}
+	}
+
+	title := LatencyStyle.Render(" ⚡ PERFORMANCE (Latency Flow)")
+	if latestStats != "" {
+		title += lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(latestStats)
+	}
+
+	performanceView := title + "\n"
 	if isFullMode {
 		m.LatencyChart.Draw()
 		performanceView += m.LatencyChart.View()
