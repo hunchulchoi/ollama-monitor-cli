@@ -20,6 +20,10 @@ func GetProcessStats() (*ProcessStats, error) {
 
 	myPid := int32(os.Getpid())
 
+	var totalCPU float64
+	var totalMem float64
+	found := false
+
 	for _, p := range procs {
 		if p.Pid == myPid {
 			continue
@@ -36,15 +40,20 @@ func GetProcessStats() (*ProcessStats, error) {
 			cpu, _ := p.CPUPercent()
 			mem, _ := p.MemoryInfo()
 			
-			stats := &ProcessStats{
-				CPU: cpu,
-			}
+			totalCPU += cpu
 			if mem != nil {
-				stats.Memory = float64(mem.RSS)
+				totalMem += float64(mem.RSS)
 			}
-			return stats, nil
+			found = true
 		}
 	}
 
-	return nil, nil
+	if !found {
+		return nil, nil
+	}
+
+	return &ProcessStats{
+		CPU:    totalCPU,
+		Memory: totalMem,
+	}, nil
 }
