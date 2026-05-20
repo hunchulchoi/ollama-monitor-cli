@@ -361,14 +361,22 @@ func (m *Model) renderHeader() string {
 	return header
 }
 
-func (m *Model) renderRunningModels(boxStyle lipgloss.Style) string {
+func (m *Model) renderRunningModels(boxStyle lipgloss.Style, contentWidth int) string {
 	modelsView := HeaderStyle.Render(" 📦 RUNNING MODELS") + "\n"
 	if len(m.RunningModels) == 0 {
 		modelsView += "  - None"
 	} else {
 		for i, info := range m.RunningModels {
-			modelsView += fmt.Sprintf("  %-20s %-8s %-12s %-12s %s",
+			line := fmt.Sprintf("  %-20s %-8s %-12s %-12s %s",
 				info.Name, info.Size, info.VRAM, info.ContextLength, info.TTL)
+			maxLen := contentWidth - 4
+			if maxLen < 10 {
+				maxLen = 10
+			}
+			if len(line) > maxLen {
+				line = line[:maxLen-3] + "..."
+			}
+			modelsView += line
 			if i < len(m.RunningModels)-1 {
 				modelsView += "\n"
 			}
@@ -429,7 +437,7 @@ func (m *Model) renderResources(boxStyle lipgloss.Style, contentWidth int, isFul
 	return boxStyle.Render(resourcesView)
 }
 
-func (m *Model) renderRequests(boxStyle lipgloss.Style, maxRequests int) string {
+func (m *Model) renderRequests(boxStyle lipgloss.Style, contentWidth int, maxRequests int) string {
 	requestsView := HeaderStyle.Render(" 🔄 RECENT REQUESTS") + "\n"
 	if len(m.Requests) == 0 {
 		requestsView += "  No requests yet..."
@@ -444,9 +452,20 @@ func (m *Model) renderRequests(boxStyle lipgloss.Style, maxRequests int) string 
 			if len(idShort) > 8 {
 				idShort = ".." + idShort[len(idShort)-8:]
 			}
+			
+			// Dynamic path truncation to prevent line wrapping on narrow screens
+			path := req.Path
+			maxPathLen := contentWidth - 65
+			if maxPathLen < 10 {
+				maxPathLen = 10
+			}
+			if len(path) > maxPathLen {
+				path = path[:maxPathLen-3] + "..."
+			}
+
 			timeStr := req.Time.Format("15:04:05")
 			requestsView += fmt.Sprintf("  %s | ID: %s | %s | %s | %s | %s",
-				TimeStyle.Render(timeStr), idShort, req.Method, req.Path, req.Status, req.ResponseTime.String())
+				TimeStyle.Render(timeStr), idShort, req.Method, path, req.Status, req.ResponseTime.String())
 			if i < len(displayReqs)-1 {
 				requestsView += "\n"
 			}
@@ -510,37 +529,53 @@ func (m *Model) View() string {
 	boxStyle := BorderStyle.Width(contentWidth)
 	isFullMode := m.height >= 38
 
-	// Calculate dynamic limits for requests and logs in compact mode to prevent scrolling
-	maxRequests := 8
-	maxLogs := 15
+	// Calculate exact height occupied by sections other than Requests and Logs
+	fixedHeight := 1 // Header
+	
+	// Models section
+	modelsCount := len(m.RunningModels)
+	if modelsCount == 0 {
+		modelsCount = 1 // Shows "  - None"
+	}
+	fixedHeight += 3 + modelsCount // Borders (2) + Header (1) + Content
 
-	if !isFullMode {
-		baseHeight := 20
+	if isFullMode {
+		fixedHeight += 11 // Performance (Borders 2 + Title 1 + Chart 8)
+		fixedHeight += 12 // Resources (Borders 2 + Title 1 + CPU: 1 + Chart 8)
 		if m.DebugMode {
-			baseHeight += 4
+			fixedHeight += 13 // Debug Metrics (Borders 2 + Title 1 + TPS: 2 + Chart 8)
 		}
+	} else {
+		fixedHeight += 4 // Performance (Borders 2 + Title 1 + Sparkline 1)
+		fixedHeight += 4 // Resources (Borders 2 + Title 1 + Sparkline 1)
+		if m.DebugMode {
+			fixedHeight += 4 // Debug Metrics (Borders 2 + Title 1 + Sparkline 1)
+		}
+	}
+	fixedHeight += 1 // Footer
 
-		available := m.height - baseHeight
-		if available < 2 {
-			maxRequests = 1
-			maxLogs = 1
-		} else {
-			reqSpace := available / 3
-			if reqSpace < 1 {
-				reqSpace = 1
-			}
-			logSpace := available - reqSpace
-			if logSpace < 1 {
-				logSpace = 1
-			}
-			maxRequests = reqSpace
-			maxLogs = logSpace
+	// Calculate dynamic limits for requests and logs to guarantee TotalHeight <= m.height
+	maxRequests := 1
+	maxLogs := 1
+
+	available := m.height - fixedHeight
+	listLinesSpace := available - 6 // Overhead of Requests (3) and Logs (3)
+	if listLinesSpace >= 2 {
+		reqSpace := listLinesSpace / 3
+		if reqSpace < 1 {
+			reqSpace = 1
 		}
+		logSpace := listLinesSpace - reqSpace
+		if logSpace < 1 {
+			logSpace = 1
+		}
+		maxRequests = reqSpace
+		maxLogs = logSpace
 	}
 
 	views := []string{
 		m.renderHeader(),
-		m.renderRunningModels(boxStyle),
+		m.renderRunningModels(boxStyle, contentWidth),
 	}
 
 	if m.DebugMode {
@@ -550,7 +585,7 @@ func (m *Model) View() string {
 	views = append(views,
 		m.renderPerformance(boxStyle, contentWidth, isFullMode),
 		m.renderResources(boxStyle, contentWidth, isFullMode),
-		m.renderRequests(boxStyle, maxRequests),
+		m.renderRequests(boxStyle, contentWidth, maxRequests),
 		m.renderLogs(boxStyle, contentWidth, maxLogs),
 		m.renderFooter(),
 	)
