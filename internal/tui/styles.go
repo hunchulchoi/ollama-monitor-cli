@@ -8,6 +8,7 @@ var (
 	InfoStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
 	WarnStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
 	ErrorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	MetricStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("13"))
 	LatencyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("13")).Bold(true).Padding(0, 1)
 	TimeStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
 )

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -40,14 +41,36 @@ func NewProxyServer(target string, metricsOut chan *LogEntry) (*ProxyServer, err
 
 	s.Proxy = httputil.NewSingleHostReverseProxy(u)
 	s.Proxy.ModifyResponse = s.modifyResponse
+	s.Proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		// Send the proxy error to TUI so it shows up in SERVER LOGS nicely
+		entry := &LogEntry{
+			Time:         time.Now(),
+			Level:        "ERROR",
+			Msg:          "Proxy error: " + err.Error(),
+			RequestID:    r.Header.Get("X-Request-ID"),
+			Method:       r.Method,
+			Path:         r.URL.Path,
+			Status:       "502",
+			ResponseTime: 0,
+		}
+		if entry.RequestID == "" {
+			entry.RequestID = "captured-proxy"
+		}
+		select {
+		case s.MetricsOut <- entry:
+		default:
+		}
+		w.WriteHeader(http.StatusBadGateway)
+	}
 	
 	return s, nil
 }
 
 func (s *ProxyServer) Start(addr string) error {
 	s.server = &http.Server{
-		Addr:    addr,
-		Handler: s.Proxy,
+		Addr:     addr,
+		Handler:  s.Proxy,
+		ErrorLog: log.New(io.Discard, "", 0), // Discard default server logging to prevent screen clutter
 	}
 	return s.server.ListenAndServe()
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hunchulchoi/ollama-monitor-cli/internal/ollama"
 )
@@ -99,5 +100,38 @@ func TestRenderPerformance(t *testing.T) {
 	}
 	if !strings.Contains(rendered, expectedDuration) {
 		t.Errorf("Expected performance rendering to contain '%s', got: %s", expectedDuration, rendered)
+	}
+}
+
+func TestRestartOllamaConfirm(t *testing.T) {
+	model := NewModel(nil, true)
+
+	// 1. Verify key 'r' or 'R' sets RestartPending to true
+	m, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+	updatedModel := m.(*Model)
+	if !updatedModel.RestartPending {
+		t.Error("Expected RestartPending to be true after pressing 'r'")
+	}
+
+	// 2. Verify footer rendering when RestartPending is true
+	footer := updatedModel.renderFooter()
+	expectedConfirmMsg := "Restart Ollama? [y] Yes"
+	if !strings.Contains(footer, expectedConfirmMsg) {
+		t.Errorf("Expected footer to contain confirm message '%s', got: %s", expectedConfirmMsg, footer)
+	}
+
+	// 3. Verify key 'y' or 'Y' inside RestartPending clears RestartPending
+	m2, _ := updatedModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	updatedModel2 := m2.(*Model)
+	if updatedModel2.RestartPending {
+		t.Error("Expected RestartPending to be cleared to false after pressing 'y'")
+	}
+
+	// 4. Verify any other key clears RestartPending
+	updatedModel.RestartPending = true
+	m3, _ := updatedModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	updatedModel3 := m3.(*Model)
+	if updatedModel3.RestartPending {
+		t.Error("Expected RestartPending to be cleared to false after pressing 'n' (any other key)")
 	}
 }

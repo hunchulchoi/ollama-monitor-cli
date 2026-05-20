@@ -66,6 +66,7 @@ type Model struct {
 	ShutdownActive   bool
 	ShutdownTime     time.Time
 	ShutdownDuration time.Duration
+	RestartPending   bool
 	CPUChart         linechart.Model
 	MemChart         linechart.Model
 	LatencyChart     linechart.Model
@@ -164,6 +165,19 @@ func (m *Model) tailLogFile(name string, offset int64) tea.Cmd {
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.RestartPending {
+			switch msg.String() {
+			case "y", "Y":
+				m.RestartPending = false
+				// Restart Ollama in background
+				go ollama.RestartOllama(m.DebugMode)
+				return m, nil
+			default:
+				m.RestartPending = false
+				return m, nil
+			}
+		}
+
 		if m.ShutdownPending {
 			switch msg.String() {
 			case "y", "Y":
@@ -203,12 +217,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case "s", "S":
+			m.RestartPending = false
 			if !m.ShutdownActive {
 				m.ShutdownPending = true
 			} else {
 				// Cancel shutdown
 				m.ShutdownActive = false
 			}
+		case "r", "R":
+			m.ShutdownPending = false
+			m.RestartPending = true
 		}
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -327,6 +345,13 @@ func (m *Model) handleLogEntry(entry *ollama.LogEntry) {
 		m.Requests = append(m.Requests, entry)
 		if len(m.Requests) > 8 {
 			m.Requests = m.Requests[len(m.Requests)-8:]
+		}
+		// If it's a metric log captured via proxy, also route to SERVER LOGS
+		if entry.Level == "METRIC" {
+			m.Logs = append(m.Logs, entry)
+			if len(m.Logs) > 15 {
+				m.Logs = m.Logs[len(m.Logs)-15:]
+			}
 		}
 	} else {
 		m.Logs = append(m.Logs, entry)
@@ -540,6 +565,8 @@ func (m *Model) renderLogs(boxStyle lipgloss.Style, contentWidth int, maxLogs in
 				style = WarnStyle
 			} else if level == "ERROR" {
 				style = ErrorStyle
+			} else if level == "METRIC" {
+				style = MetricStyle
 			}
 			msg := log.Msg
 			maxLen := contentWidth - 28
@@ -560,8 +587,10 @@ func (m *Model) renderLogs(boxStyle lipgloss.Style, contentWidth int, maxLogs in
 }
 
 func (m *Model) renderFooter() string {
-	footerText := " [q] Quit | [d] Toggle Debug | [p] Toggle Proxy | [s] Shutdown Timer"
-	if m.ShutdownPending {
+	footerText := " [q] Quit | [d] Toggle Debug | [p] Toggle Proxy | [s] Shutdown Timer | [r] Restart Ollama"
+	if m.RestartPending {
+		footerText = ErrorStyle.Bold(true).Render(" 🚨 Restart Ollama? [y] Yes / [any] No ")
+	} else if m.ShutdownPending {
 		footerText = ErrorStyle.Bold(true).Render(" 🚨 Shutdown in 10 mins? [y] Yes / [any] No ")
 	} else if m.ShutdownActive {
 		footerText = ErrorStyle.Bold(true).Render(" 🚨 Shutdown Timer Active (Press [s] to cancel) ")
