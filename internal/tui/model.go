@@ -429,12 +429,17 @@ func (m *Model) renderResources(boxStyle lipgloss.Style, contentWidth int, isFul
 	return boxStyle.Render(resourcesView)
 }
 
-func (m *Model) renderRequests(boxStyle lipgloss.Style) string {
+func (m *Model) renderRequests(boxStyle lipgloss.Style, maxRequests int) string {
 	requestsView := HeaderStyle.Render(" 🔄 RECENT REQUESTS") + "\n"
 	if len(m.Requests) == 0 {
 		requestsView += "  No requests yet..."
 	} else {
-		for i, req := range m.Requests {
+		start := len(m.Requests) - maxRequests
+		if start < 0 {
+			start = 0
+		}
+		displayReqs := m.Requests[start:]
+		for i, req := range displayReqs {
 			idShort := req.RequestID
 			if len(idShort) > 8 {
 				idShort = ".." + idShort[len(idShort)-8:]
@@ -442,7 +447,7 @@ func (m *Model) renderRequests(boxStyle lipgloss.Style) string {
 			timeStr := req.Time.Format("15:04:05")
 			requestsView += fmt.Sprintf("  %s | ID: %s | %s | %s | %s | %s",
 				TimeStyle.Render(timeStr), idShort, req.Method, req.Path, req.Status, req.ResponseTime.String())
-			if i < len(m.Requests)-1 {
+			if i < len(displayReqs)-1 {
 				requestsView += "\n"
 			}
 		}
@@ -450,12 +455,17 @@ func (m *Model) renderRequests(boxStyle lipgloss.Style) string {
 	return boxStyle.Render(requestsView)
 }
 
-func (m *Model) renderLogs(boxStyle lipgloss.Style, contentWidth int) string {
+func (m *Model) renderLogs(boxStyle lipgloss.Style, contentWidth int, maxLogs int) string {
 	logsView := HeaderStyle.Render(" 📜 SERVER LOGS") + "\n"
 	if len(m.Logs) == 0 {
 		logsView += "  No logs yet..."
 	} else {
-		for i, log := range m.Logs {
+		start := len(m.Logs) - maxLogs
+		if start < 0 {
+			start = 0
+		}
+		displayLogs := m.Logs[start:]
+		for i, log := range displayLogs {
 			level := log.Level
 			style := InfoStyle
 			if level == "WARN" {
@@ -473,7 +483,7 @@ func (m *Model) renderLogs(boxStyle lipgloss.Style, contentWidth int) string {
 			}
 			timeStr := log.Time.Format("15:04:05")
 			logsView += "  " + TimeStyle.Render(timeStr) + " " + style.Render(level) + " | " + msg
-			if i < len(m.Logs)-1 {
+			if i < len(displayLogs)-1 {
 				logsView += "\n"
 			}
 		}
@@ -500,6 +510,34 @@ func (m *Model) View() string {
 	boxStyle := BorderStyle.Width(contentWidth)
 	isFullMode := m.height >= 38
 
+	// Calculate dynamic limits for requests and logs in compact mode to prevent scrolling
+	maxRequests := 8
+	maxLogs := 15
+
+	if !isFullMode {
+		baseHeight := 20
+		if m.DebugMode {
+			baseHeight += 4
+		}
+
+		available := m.height - baseHeight
+		if available < 2 {
+			maxRequests = 1
+			maxLogs = 1
+		} else {
+			reqSpace := available / 3
+			if reqSpace < 1 {
+				reqSpace = 1
+			}
+			logSpace := available - reqSpace
+			if logSpace < 1 {
+				logSpace = 1
+			}
+			maxRequests = reqSpace
+			maxLogs = logSpace
+		}
+	}
+
 	views := []string{
 		m.renderHeader(),
 		m.renderRunningModels(boxStyle),
@@ -512,8 +550,8 @@ func (m *Model) View() string {
 	views = append(views,
 		m.renderPerformance(boxStyle, contentWidth, isFullMode),
 		m.renderResources(boxStyle, contentWidth, isFullMode),
-		m.renderRequests(boxStyle),
-		m.renderLogs(boxStyle, contentWidth),
+		m.renderRequests(boxStyle, maxRequests),
+		m.renderLogs(boxStyle, contentWidth, maxLogs),
 		m.renderFooter(),
 	)
 
