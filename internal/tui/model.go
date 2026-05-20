@@ -70,6 +70,7 @@ type Model struct {
 	MemChart         linechart.Model
 	LatencyChart     linechart.Model
 	TPSChart         linechart.Model
+	APIError         error
 }
 
 func NewModel(client *ollama.Client, debugMode bool) *Model {
@@ -230,6 +231,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TickMsg:
 		res, err := m.client.GetRunningModels()
 		if err == nil {
+			m.APIError = nil
 			var models []RunningModelInfo
 			for _, mod := range res.Models {
 				vramPercent := "0%"
@@ -257,6 +259,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				})
 			}
 			m.RunningModels = models
+		} else {
+			m.APIError = err
 		}
 
 		// Fetch process stats
@@ -363,7 +367,9 @@ func (m *Model) renderHeader() string {
 
 func (m *Model) renderRunningModels(boxStyle lipgloss.Style, contentWidth int) string {
 	modelsView := HeaderStyle.Render(" 📦 RUNNING MODELS") + "\n"
-	if len(m.RunningModels) == 0 {
+	if m.APIError != nil {
+		modelsView += "  " + ErrorStyle.Bold(true).Render(fmt.Sprintf("⚠️  API ERROR: %v", m.APIError))
+	} else if len(m.RunningModels) == 0 {
 		modelsView += "  - None"
 	} else {
 		for i, info := range m.RunningModels {

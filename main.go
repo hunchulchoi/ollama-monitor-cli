@@ -41,7 +41,7 @@ func main() {
 		apiURL = os.Getenv("OLLAMA_API_URL")
 	}
 	if apiURL == "" {
-		apiURL = "http://localhost:11434"
+		apiURL = "http://127.0.0.1:11434"
 	}
 
 	apiKey := *flagAPIKey
