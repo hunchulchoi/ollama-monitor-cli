@@ -404,6 +404,7 @@ func (m *Model) renderDebugMetrics(boxStyle lipgloss.Style, contentWidth int, is
 	if isFullMode {
 		tokenSpark := RenderSparkline(m.EvalTokens, sparkWidth, 10.0)
 		tokenView := "  TOKENS: " + tokenSpark
+		m.TPSChart.Draw()
 		tpsView := "   TPS:\n" + m.TPSChart.View()
 		debugMetricsView += lipgloss.JoinHorizontal(lipgloss.Top, tokenView, tpsView)
 	} else {
@@ -417,6 +418,7 @@ func (m *Model) renderDebugMetrics(boxStyle lipgloss.Style, contentWidth int, is
 func (m *Model) renderPerformance(boxStyle lipgloss.Style, contentWidth int, isFullMode bool) string {
 	performanceView := LatencyStyle.Render(" ⚡ PERFORMANCE (Latency Flow)") + "\n"
 	if isFullMode {
+		m.LatencyChart.Draw()
 		performanceView += m.LatencyChart.View()
 	} else {
 		sparkline := RenderSparkline(m.Latencies, contentWidth-4, 1000.0) // Floor at 1s (1000ms)
@@ -432,6 +434,8 @@ func (m *Model) renderPerformance(boxStyle lipgloss.Style, contentWidth int, isF
 func (m *Model) renderResources(boxStyle lipgloss.Style, contentWidth int, isFullMode bool) string {
 	resourcesView := LatencyStyle.Render(" 📊 RESOURCE USAGE (History)") + "\n"
 	if isFullMode {
+		m.CPUChart.Draw()
+		m.MemChart.Draw()
 		cpuView := "  CPU:\n" + m.CPUChart.View()
 		memView := "   MEM:\n" + m.MemChart.View()
 		resourcesView += lipgloss.JoinHorizontal(lipgloss.Top, cpuView, memView)
