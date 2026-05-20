@@ -164,25 +164,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.EvalTokens = nil
 			m.TPSHistory = nil
 			// Restart Ollama in background
-			go ollama.RestartOllama(m.DebugMode, m.ProxyMode)
+			go ollama.RestartOllama(m.DebugMode)
 		case "p", "P":
 			m.ProxyMode = !m.ProxyMode
 			if m.ProxyMode {
-				// Start proxy logic
+				// Start proxy on 11435, pointing to 11434
 				go func() {
-					// 1. Restart Ollama on 11435
-					ollama.RestartOllama(m.DebugMode, true)
-					// 2. Start Proxy on 11434
-					proxy, _ := ollama.NewProxyServer("http://localhost:11435", m.ProxyChan)
+					proxy, _ := ollama.NewProxyServer("http://localhost:11434", m.ProxyChan)
 					m.proxyServer = proxy
-					proxy.Start(":11434")
+					proxy.Start(":11435")
 				}()
 			} else {
-				// Stop proxy logic
+				// Stop proxy
 				if m.proxyServer != nil {
 					m.proxyServer.Stop()
 				}
-				go ollama.RestartOllama(m.DebugMode, false)
 			}
 		case "s", "S":
 			if !m.ShutdownActive {
@@ -319,7 +315,7 @@ func (m Model) View() string {
 		header += " | " + ErrorStyle.Bold(true).Render("DEBUG ON")
 	}
 	if m.ProxyMode {
-		header += " | " + ErrorStyle.Bold(true).Foreground(lipgloss.Color("13")).Render("PROXY ON")
+		header += " | " + ErrorStyle.Bold(true).Foreground(lipgloss.Color("13")).Render("PROXY ON (Point Client to port 11435)")
 	}
 	if m.ShutdownActive {
 		minutes := int(m.ShutdownDuration.Minutes())

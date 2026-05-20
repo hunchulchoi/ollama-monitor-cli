@@ -24,10 +24,10 @@ func main() {
 
 	debugMode := *flagDebug
 	if debugMode {
-		fmt.Println("\033[33m⚠️  Ollama will be restarted to apply Debug Mode and Proxy settings.\033[0m")
+		fmt.Println("\033[33m⚠️  Ollama will be restarted to apply Debug Mode settings.\033[0m")
 		fmt.Println("\033[33m   (Any ongoing generation will be interrupted)\033[0m")
 		fmt.Println("Restarting Ollama...")
-		if err := ollama.RestartOllama(true, false); err != nil {
+		if err := ollama.RestartOllama(true); err != nil {
 			fmt.Printf("Warning: Could not restart Ollama: %v\n", err)
 		}
 	} else {

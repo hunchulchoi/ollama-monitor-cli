@@ -13,7 +13,7 @@ import (
 )
 
 // RestartOllama kills any running ollama process and starts a new one
-func RestartOllama(debug bool, proxy bool) error {
+func RestartOllama(debug bool) error {
 	// 1. Kill existing process
 	if err := KillOllama(); err != nil {
 		// It's okay if it fails (might not be running)
@@ -49,10 +49,10 @@ func RestartOllama(debug bool, proxy bool) error {
 	// Set environment variables
 	env := os.Environ()
 	
-	// Remove any existing OLLAMA_DEBUG/OLLAMA_HOST from environment to prevent conflicts
+	// Remove any existing OLLAMA_DEBUG from environment to prevent conflicts
 	newEnv := []string{}
 	for _, e := range env {
-		if !strings.HasPrefix(e, "OLLAMA_DEBUG=") && !strings.HasPrefix(e, "OLLAMA_HOST=") {
+		if !strings.HasPrefix(e, "OLLAMA_DEBUG=") {
 			newEnv = append(newEnv, e)
 		}
 	}
@@ -60,10 +60,6 @@ func RestartOllama(debug bool, proxy bool) error {
 	// Add our specific settings at the end
 	if debug {
 		newEnv = append(newEnv, "OLLAMA_DEBUG=1")
-	}
-	if proxy {
-		// Set OLLAMA_HOST to 11435 so the monitor can listen on 11434 and proxy
-		newEnv = append(newEnv, "OLLAMA_HOST=127.0.0.1:11435")
 	}
 	cmd.Env = newEnv
 
