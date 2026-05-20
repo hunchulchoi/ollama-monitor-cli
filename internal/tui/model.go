@@ -42,8 +42,12 @@ type RunningModelInfo struct {
 	TTL           string
 }
 
+type NewLogEntry *ollama.LogEntry
+
 type Model struct {
 	client           *ollama.Client
+	ProxyChan        chan *ollama.LogEntry
+	proxyServer      *ollama.ProxyServer
 	RunningModels    []RunningModelInfo
 	Logs             []*ollama.LogEntry
 	Requests         []*ollama.LogEntry
@@ -52,6 +56,7 @@ type Model struct {
 	CPUHistory       []float64
 	MemHistory       []float64
 	DebugMode        bool
+	ProxyMode        bool
 	EvalTokens       []float64 // Generated tokens per request
 	TPSHistory       []float64 // Tokens Per Second
 	width            int
@@ -66,6 +71,17 @@ func NewModel(client *ollama.Client, debugMode bool) Model {
 	return Model{
 		client:    client,
 		DebugMode: debugMode,
+		ProxyChan: make(chan *ollama.LogEntry, 10),
+	}
+}
+
+func (m Model) waitForProxyMetrics() tea.Cmd {
+	return func() tea.Msg {
+		entry := <-m.ProxyChan
+		if entry == nil {
+			return nil
+		}
+		return NewLogEntry(entry)
 	}
 }
 
@@ -74,6 +90,7 @@ func (m Model) Init() tea.Cmd {
 		doTick(),
 		m.tailLogFile("server.log", -1),
 		m.tailLogFile("app.log", -1),
+		m.waitForProxyMetrics(),
 	)
 }
 
@@ -147,7 +164,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.EvalTokens = nil
 			m.TPSHistory = nil
 			// Restart Ollama in background
-			go ollama.RestartOllama(m.DebugMode)
+			go ollama.RestartOllama(m.DebugMode, m.ProxyMode)
+		case "p", "P":
+			m.ProxyMode = !m.ProxyMode
+			if m.ProxyMode {
+				// Start proxy logic
+				go func() {
+					// 1. Restart Ollama on 11435
+					ollama.RestartOllama(m.DebugMode, true)
+					// 2. Start Proxy on 11434
+					proxy, _ := ollama.NewProxyServer("http://localhost:11435", m.ProxyChan)
+					m.proxyServer = proxy
+					proxy.Start(":11434")
+				}()
+			} else {
+				// Stop proxy logic
+				if m.proxyServer != nil {
+					m.proxyServer.Stop()
+				}
+				go ollama.RestartOllama(m.DebugMode, false)
+			}
 		case "s", "S":
 			if !m.ShutdownActive {
 				m.ShutdownPending = true
@@ -225,6 +261,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.handleLogEntry(entry)
 		}
 		return m, m.tailLogFile(msg.fileName, msg.offset)
+	case NewLogEntry:
+		if msg != nil {
+			m.handleLogEntry((*ollama.LogEntry)(msg))
+		}
+		return m, m.waitForProxyMetrics()
 	}
 	return m, nil
 }
@@ -276,6 +317,9 @@ func (m Model) View() string {
 	}
 	if m.DebugMode {
 		header += " | " + ErrorStyle.Bold(true).Render("DEBUG ON")
+	}
+	if m.ProxyMode {
+		header += " | " + ErrorStyle.Bold(true).Foreground(lipgloss.Color("13")).Render("PROXY ON")
 	}
 	if m.ShutdownActive {
 		minutes := int(m.ShutdownDuration.Minutes())
@@ -379,7 +423,7 @@ func (m Model) View() string {
 		}
 	}
 
-	footerText := " [q] Quit | [d] Toggle Debug | [s] Shutdown Timer"
+	footerText := " [q] Quit | [d] Toggle Debug | [p] Toggle Proxy | [s] Shutdown Timer"
 	if m.ShutdownPending {
 		footerText = ErrorStyle.Bold(true).Render(" 🚨 Shutdown in 10 mins? [y] Yes / [any] No ")
 	} else if m.ShutdownActive {
