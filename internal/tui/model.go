@@ -212,6 +212,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+
+		chartWidth := (msg.Width - 10) / 2
+		if chartWidth < 10 {
+			chartWidth = 10
+		}
+
+		m.CPUChart.Resize(chartWidth, 8)
+		m.MemChart.Resize(chartWidth, 8)
+		m.LatencyChart.Resize(msg.Width-6, 8)
+		m.TPSChart.Resize(chartWidth, 8)
 	case TickMsg:
 		res, err := m.client.GetRunningModels()
 		if err == nil {
@@ -249,10 +259,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Stats = stats
 		if stats != nil {
 			m.CPUHistory = append(m.CPUHistory, stats.CPU)
+			m.CPUChart.Push(stats.CPU)
 			if len(m.CPUHistory) > 50 {
 				m.CPUHistory = m.CPUHistory[len(m.CPUHistory)-50:]
 			}
 			m.MemHistory = append(m.MemHistory, stats.Memory)
+			m.MemChart.Push(stats.Memory / (1024 * 1024 * 1024))
 			if len(m.MemHistory) > 50 {
 				m.MemHistory = m.MemHistory[len(m.MemHistory)-50:]
 			}
@@ -295,6 +307,7 @@ func (m *Model) handleLogEntry(entry *ollama.LogEntry) {
 		}
 		if entry.ResponseTime > 0 {
 			m.Latencies = append(m.Latencies, float64(entry.ResponseTime.Milliseconds()))
+			m.LatencyChart.Push(float64(entry.ResponseTime.Milliseconds()))
 		}
 	} else {
 		m.Logs = append(m.Logs, entry)
@@ -312,6 +325,7 @@ func (m *Model) handleLogEntry(entry *ollama.LogEntry) {
 			if entry.EvalDuration > 0 {
 				tps := float64(entry.EvalCount) / entry.EvalDuration.Seconds()
 				m.TPSHistory = append(m.TPSHistory, tps)
+				m.TPSChart.Push(tps)
 				if len(m.TPSHistory) > 50 {
 					m.TPSHistory = m.TPSHistory[len(m.TPSHistory)-50:]
 				}
