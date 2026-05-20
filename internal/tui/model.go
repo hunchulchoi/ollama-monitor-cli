@@ -192,7 +192,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.ProxyMode {
 				// Start proxy on 11435, pointing to 11434
 				go func() {
-					proxy, _ := ollama.NewProxyServer("http://localhost:11434", m.ProxyChan)
+					proxy, _ := ollama.NewProxyServer(m.client.BaseURL, m.ProxyChan)
 					m.proxyServer = proxy
 					proxy.Start(":11435")
 				}()
@@ -312,35 +312,39 @@ func (m *Model) handleLogEntry(entry *ollama.LogEntry) {
 	if entry == nil {
 		return
 	}
-	if entry.RequestID != "" {
+
+	// 1. Log list routing
+	if entry.RequestID != "" || entry.Method != "" || entry.Path != "" {
 		m.Requests = append(m.Requests, entry)
 		if len(m.Requests) > 8 {
 			m.Requests = m.Requests[len(m.Requests)-8:]
-		}
-		if entry.ResponseTime > 0 {
-			m.Latencies = append(m.Latencies, float64(entry.ResponseTime.Milliseconds()))
-			m.LatencyChart.Push(float64(entry.ResponseTime.Milliseconds()))
 		}
 	} else {
 		m.Logs = append(m.Logs, entry)
 		if len(m.Logs) > 15 {
 			m.Logs = m.Logs[len(m.Logs)-15:]
 		}
+	}
 
-		// If it's a "finish generation" message with debug metrics
-		if entry.EvalCount > 0 {
-			m.EvalTokens = append(m.EvalTokens, float64(entry.EvalCount))
-			if len(m.EvalTokens) > 50 {
-				m.EvalTokens = m.EvalTokens[len(m.EvalTokens)-50:]
-			}
+	// 2. Latency flow ingestion
+	if entry.ResponseTime > 0 {
+		m.Latencies = append(m.Latencies, float64(entry.ResponseTime.Milliseconds()))
+		m.LatencyChart.Push(float64(entry.ResponseTime.Milliseconds()))
+	}
 
-			if entry.EvalDuration > 0 {
-				tps := float64(entry.EvalCount) / entry.EvalDuration.Seconds()
-				m.TPSHistory = append(m.TPSHistory, tps)
-				m.TPSChart.Push(tps)
-				if len(m.TPSHistory) > 50 {
-					m.TPSHistory = m.TPSHistory[len(m.TPSHistory)-50:]
-				}
+	// 3. TPS and token generation ingestion
+	if entry.EvalCount > 0 {
+		m.EvalTokens = append(m.EvalTokens, float64(entry.EvalCount))
+		if len(m.EvalTokens) > 50 {
+			m.EvalTokens = m.EvalTokens[len(m.EvalTokens)-50:]
+		}
+
+		if entry.EvalDuration > 0 {
+			tps := float64(entry.EvalCount) / entry.EvalDuration.Seconds()
+			m.TPSHistory = append(m.TPSHistory, tps)
+			m.TPSChart.Push(tps)
+			if len(m.TPSHistory) > 50 {
+				m.TPSHistory = m.TPSHistory[len(m.TPSHistory)-50:]
 			}
 		}
 	}

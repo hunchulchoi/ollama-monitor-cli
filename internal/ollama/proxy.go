@@ -75,9 +75,15 @@ func (s *ProxyServer) modifyResponse(resp *http.Response) error {
 	}
 	resp.Body = io.NopCloser(bytes.NewBuffer(body))
 
+	method := resp.Request.Method
+	reqID := resp.Request.Header.Get("X-Request-ID")
+	if reqID == "" {
+		reqID = "captured-proxy"
+	}
+
 	var metrics ProxyMetrics
 	if err := json.Unmarshal(body, &metrics); err == nil && metrics.EvalCount > 0 {
-		s.sendMetrics(&metrics)
+		s.sendMetrics(&metrics, method, path, reqID)
 		return nil
 	}
 
@@ -88,7 +94,7 @@ func (s *ProxyServer) modifyResponse(resp *http.Response) error {
 		}
 		var m ProxyMetrics
 		if err := json.Unmarshal(lines[i], &m); err == nil && m.EvalCount > 0 {
-			s.sendMetrics(&m)
+			s.sendMetrics(&m, method, path, reqID)
 			break
 		}
 	}
@@ -96,7 +102,7 @@ func (s *ProxyServer) modifyResponse(resp *http.Response) error {
 	return nil
 }
 
-func (s *ProxyServer) sendMetrics(m *ProxyMetrics) {
+func (s *ProxyServer) sendMetrics(m *ProxyMetrics, method, path, reqID string) {
 	entry := &LogEntry{
 		Time:               time.Now(),
 		Level:              "METRIC",
@@ -106,6 +112,10 @@ func (s *ProxyServer) sendMetrics(m *ProxyMetrics) {
 		EvalDuration:       m.EvalDuration,
 		PromptEvalDuration: m.PromptEvalDuration,
 		TotalDuration:      m.TotalDuration,
+		ResponseTime:       m.TotalDuration, // Map TotalDuration to ResponseTime
+		RequestID:          reqID,
+		Method:             method,
+		Path:               path,
 		Status:             "200",
 	}
 	
