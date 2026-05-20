@@ -250,11 +250,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 
+				ctxStr := "N/A"
+				if mod.ContextLength > 0 {
+					if mod.ContextLength%1024 == 0 {
+						ctxStr = fmt.Sprintf("%dk", mod.ContextLength/1024)
+					} else {
+						ctxStr = fmt.Sprintf("%.1fk", float64(mod.ContextLength)/1024.0)
+					}
+				}
+
 				models = append(models, RunningModelInfo{
 					Name:          mod.Name,
 					Size:          fmt.Sprintf("%.1fGB", float64(mod.Size)/(1024*1024*1024)),
 					VRAM:          vramPercent,
-					ContextLength: fmt.Sprintf("%d", mod.ContextLength),
+					ContextLength: ctxStr,
 					TTL:           ttl,
 				})
 			}
@@ -376,6 +385,10 @@ func (m *Model) renderRunningModels(boxStyle lipgloss.Style, contentWidth int) s
 	} else if len(m.RunningModels) == 0 {
 		modelsView += "  - None"
 	} else {
+		headerLine := fmt.Sprintf("  %-20s %-8s %-12s %-12s %s", "MODEL", "SIZE", "VRAM", "CTX LIMIT", "TTL")
+		headerLine = lipgloss.NewStyle().Foreground(lipgloss.Color("242")).Bold(true).Render(headerLine)
+		modelsView += headerLine + "\n"
+
 		for i, info := range m.RunningModels {
 			line := fmt.Sprintf("  %-20s %-8s %-12s %-12s %s",
 				info.Name, info.Size, info.VRAM, info.ContextLength, info.TTL)
@@ -423,8 +436,13 @@ func (m *Model) renderPerformance(boxStyle lipgloss.Style, contentWidth int, isF
 		if totalDuration == 0 && lastReq.ResponseTime > 0 {
 			totalDuration = lastReq.ResponseTime
 		}
-		if lastReq.EvalCount > 0 || totalDuration > 0 {
-			latestStats = fmt.Sprintf(" [Latest: eval_count: %d | total_duration: %s]", lastReq.EvalCount, totalDuration.String())
+		if lastReq.EvalCount > 0 || lastReq.PromptEvalCount > 0 || totalDuration > 0 {
+			if lastReq.PromptEvalCount > 0 || lastReq.EvalCount > 0 {
+				latestStats = fmt.Sprintf(" [Latest: Prompt: %d | Response: %d | Duration: %s]",
+					lastReq.PromptEvalCount, lastReq.EvalCount, totalDuration.String())
+			} else {
+				latestStats = fmt.Sprintf(" [Latest: Duration: %s]", totalDuration.String())
+			}
 		}
 	}
 
@@ -567,6 +585,8 @@ func (m *Model) View() string {
 	modelsCount := len(m.RunningModels)
 	if modelsCount == 0 {
 		modelsCount = 1 // Shows "  - None"
+	} else {
+		modelsCount += 1 // Table header line
 	}
 	fixedHeight += 3 + modelsCount // Borders (2) + Header (1) + Content
 

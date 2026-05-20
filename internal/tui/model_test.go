@@ -73,26 +73,31 @@ func TestRenderPerformance(t *testing.T) {
 	model := NewModel(nil, true)
 	model.Requests = []*ollama.LogEntry{
 		{
-			RequestID:     "1234567890",
-			Time:          time.Now(),
-			Method:        "POST",
-			Path:          "/api/generate",
-			Status:        "200",
-			EvalCount:     150,
-			TotalDuration: 3500 * time.Millisecond,
+			RequestID:       "1234567890",
+			Time:            time.Now(),
+			Method:          "POST",
+			Path:            "/api/generate",
+			Status:          "200",
+			PromptEvalCount: 50,
+			EvalCount:       150,
+			TotalDuration:   3500 * time.Millisecond,
 		},
 	}
 
 	boxStyle := lipgloss.NewStyle()
 	rendered := model.renderPerformance(boxStyle, 80, true)
 
-	expectedEvalCount := "eval_count: 150"
-	expectedTotalDuration := "total_duration: 3.5s"
+	expectedPrompt := "Prompt: 50"
+	expectedResponse := "Response: 150"
+	expectedDuration := "Duration: 3.5s"
 
-	if !strings.Contains(rendered, expectedEvalCount) {
-		t.Errorf("Expected performance rendering to contain '%s', got: %s", expectedEvalCount, rendered)
+	if !strings.Contains(rendered, expectedPrompt) {
+		t.Errorf("Expected performance rendering to contain '%s', got: %s", expectedPrompt, rendered)
 	}
-	if !strings.Contains(rendered, expectedTotalDuration) {
-		t.Errorf("Expected performance rendering to contain '%s', got: %s", expectedTotalDuration, rendered)
+	if !strings.Contains(rendered, expectedResponse) {
+		t.Errorf("Expected performance rendering to contain '%s', got: %s", expectedResponse, rendered)
+	}
+	if !strings.Contains(rendered, expectedDuration) {
+		t.Errorf("Expected performance rendering to contain '%s', got: %s", expectedDuration, rendered)
 	}
 }
