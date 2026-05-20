@@ -342,14 +342,7 @@ func (m *Model) handleLogEntry(entry *ollama.LogEntry) {
 	}
 }
 
-func (m *Model) View() string {
-	if m.width == 0 {
-		return "Initializing..."
-	}
-
-	contentWidth := m.width - 4
-	boxStyle := BorderStyle.Width(contentWidth)
-
+func (m *Model) renderHeader() string {
 	header := HeaderStyle.Render(" 🦙 OLLAMA MONITOR") + "  " + time.Now().Format("15:04:05")
 	if m.Stats != nil {
 		header += fmt.Sprintf(" | CPU: %.1f%% | MEM: %.1fGB", m.Stats.CPU, m.Stats.Memory/(1024*1024*1024))
@@ -365,8 +358,10 @@ func (m *Model) View() string {
 		seconds := int(m.ShutdownDuration.Seconds()) % 60
 		header += fmt.Sprintf(" | " + ErrorStyle.Bold(true).Render("SHUTDOWN IN %02d:%02d"), minutes, seconds)
 	}
+	return header
+}
 
-	// Models Section
+func (m *Model) renderRunningModels(boxStyle lipgloss.Style) string {
 	modelsView := HeaderStyle.Render(" 📦 RUNNING MODELS") + "\n"
 	if len(m.RunningModels) == 0 {
 		modelsView += "  - None"
@@ -379,34 +374,29 @@ func (m *Model) View() string {
 			}
 		}
 	}
+	return boxStyle.Render(modelsView)
+}
 
-	isFullMode := m.height >= 38
-
-	// Debug Metrics Section (Conditional)
-	var debugMetricsView string
-	if m.DebugMode {
-		debugMetricsView = HeaderStyle.Render(" 🎯 DEBUG METRICS (Tokens & Speed)") + "\n"
-		if isFullMode {
-			sparkWidth := (contentWidth - 16) / 2
-			if sparkWidth < 5 {
-				sparkWidth = 5
-			}
-			tokenSpark := RenderSparkline(m.EvalTokens, sparkWidth, 10.0)
-			tokenView := "  TOKENS: " + tokenSpark
-			tpsView := "   TPS:\n" + m.TPSChart.View()
-			debugMetricsView += lipgloss.JoinHorizontal(lipgloss.Top, tokenView, tpsView)
-		} else {
-			sparkWidth := (contentWidth - 16) / 2
-			if sparkWidth < 5 {
-				sparkWidth = 5
-			}
-			tokenSpark := RenderSparkline(m.EvalTokens, sparkWidth, 10.0)
-			tpsSpark := RenderSparkline(m.TPSHistory, sparkWidth, 5.0)
-			debugMetricsView += fmt.Sprintf("  TOKENS: %-*s  TPS: %-*s", sparkWidth, tokenSpark, sparkWidth, tpsSpark)
-		}
+func (m *Model) renderDebugMetrics(boxStyle lipgloss.Style, contentWidth int, isFullMode bool) string {
+	debugMetricsView := HeaderStyle.Render(" 🎯 DEBUG METRICS (Tokens & Speed)") + "\n"
+	sparkWidth := (contentWidth - 16) / 2
+	if sparkWidth < 5 {
+		sparkWidth = 5
 	}
+	if isFullMode {
+		tokenSpark := RenderSparkline(m.EvalTokens, sparkWidth, 10.0)
+		tokenView := "  TOKENS: " + tokenSpark
+		tpsView := "   TPS:\n" + m.TPSChart.View()
+		debugMetricsView += lipgloss.JoinHorizontal(lipgloss.Top, tokenView, tpsView)
+	} else {
+		tokenSpark := RenderSparkline(m.EvalTokens, sparkWidth, 10.0)
+		tpsSpark := RenderSparkline(m.TPSHistory, sparkWidth, 5.0)
+		debugMetricsView += fmt.Sprintf("  TOKENS: %-*s  TPS: %-*s", sparkWidth, tokenSpark, sparkWidth, tpsSpark)
+	}
+	return boxStyle.Render(debugMetricsView)
+}
 
-	// Performance Section
+func (m *Model) renderPerformance(boxStyle lipgloss.Style, contentWidth int, isFullMode bool) string {
 	performanceView := LatencyStyle.Render(" ⚡ PERFORMANCE (Latency Flow)") + "\n"
 	if isFullMode {
 		performanceView += m.LatencyChart.View()
@@ -418,16 +408,16 @@ func (m *Model) View() string {
 			performanceView += "  " + sparkline
 		}
 	}
+	return boxStyle.Render(performanceView)
+}
 
-	// Resources Section
+func (m *Model) renderResources(boxStyle lipgloss.Style, contentWidth int, isFullMode bool) string {
 	resourcesView := LatencyStyle.Render(" 📊 RESOURCE USAGE (History)") + "\n"
 	if isFullMode {
 		cpuView := "  CPU:\n" + m.CPUChart.View()
 		memView := "   MEM:\n" + m.MemChart.View()
 		resourcesView += lipgloss.JoinHorizontal(lipgloss.Top, cpuView, memView)
 	} else {
-		// Calculate dynamic width for sparklines to prevent overflow
-		// Total available = contentWidth. We have labels "  CPU: " (7) and "  MEM: " (7)
 		sparkWidth := (contentWidth - 16) / 2
 		if sparkWidth < 5 {
 			sparkWidth = 5
@@ -436,8 +426,10 @@ func (m *Model) View() string {
 		memSpark := RenderSparkline(m.MemHistory, sparkWidth, 1024*1024*1024) // Floor at 1GB RAM
 		resourcesView += fmt.Sprintf("  CPU: %-*s  MEM: %-*s", sparkWidth, cpuSpark, sparkWidth, memSpark)
 	}
+	return boxStyle.Render(resourcesView)
+}
 
-	// Requests Section
+func (m *Model) renderRequests(boxStyle lipgloss.Style) string {
 	requestsView := HeaderStyle.Render(" 🔄 RECENT REQUESTS") + "\n"
 	if len(m.Requests) == 0 {
 		requestsView += "  No requests yet..."
@@ -455,8 +447,10 @@ func (m *Model) View() string {
 			}
 		}
 	}
+	return boxStyle.Render(requestsView)
+}
 
-	// Logs Section
+func (m *Model) renderLogs(boxStyle lipgloss.Style, contentWidth int) string {
 	logsView := HeaderStyle.Render(" 📜 SERVER LOGS") + "\n"
 	if len(m.Logs) == 0 {
 		logsView += "  No logs yet..."
@@ -470,8 +464,12 @@ func (m *Model) View() string {
 				style = ErrorStyle
 			}
 			msg := log.Msg
-			if len(msg) > contentWidth-28 {
-				msg = msg[:contentWidth-28] + "..."
+			maxLen := contentWidth - 28
+			if maxLen < 5 {
+				maxLen = 5
+			}
+			if len(msg) > maxLen && maxLen > 0 {
+				msg = msg[:maxLen] + "..."
 			}
 			timeStr := log.Time.Format("15:04:05")
 			logsView += "  " + TimeStyle.Render(timeStr) + " " + style.Render(level) + " | " + msg
@@ -480,28 +478,43 @@ func (m *Model) View() string {
 			}
 		}
 	}
+	return boxStyle.Render(logsView)
+}
 
+func (m *Model) renderFooter() string {
 	footerText := " [q] Quit | [d] Toggle Debug | [p] Toggle Proxy | [s] Shutdown Timer"
 	if m.ShutdownPending {
 		footerText = ErrorStyle.Bold(true).Render(" 🚨 Shutdown in 10 mins? [y] Yes / [any] No ")
 	} else if m.ShutdownActive {
 		footerText = ErrorStyle.Bold(true).Render(" 🚨 Shutdown Timer Active (Press [s] to cancel) ")
 	}
-	footer := TimeStyle.Render(footerText)
+	return TimeStyle.Render(footerText)
+}
+
+func (m *Model) View() string {
+	if m.width == 0 {
+		return "Initializing..."
+	}
+
+	contentWidth := m.width - 4
+	boxStyle := BorderStyle.Width(contentWidth)
+	isFullMode := m.height >= 38
 
 	views := []string{
-		header,
-		boxStyle.Render(modelsView),
+		m.renderHeader(),
+		m.renderRunningModels(boxStyle),
 	}
+
 	if m.DebugMode {
-		views = append(views, boxStyle.Render(debugMetricsView))
+		views = append(views, m.renderDebugMetrics(boxStyle, contentWidth, isFullMode))
 	}
+
 	views = append(views,
-		boxStyle.Render(performanceView),
-		boxStyle.Render(resourcesView),
-		boxStyle.Render(requestsView),
-		boxStyle.Render(logsView),
-		footer,
+		m.renderPerformance(boxStyle, contentWidth, isFullMode),
+		m.renderResources(boxStyle, contentWidth, isFullMode),
+		m.renderRequests(boxStyle),
+		m.renderLogs(boxStyle, contentWidth),
+		m.renderFooter(),
 	)
 
 	return lipgloss.JoinVertical(lipgloss.Left, views...)

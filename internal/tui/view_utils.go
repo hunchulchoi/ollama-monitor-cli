@@ -3,6 +3,9 @@ package tui
 import "strings"
 
 func RenderSparkline(data []float64, width int, minMax float64) string {
+	if width <= 0 {
+		return ""
+	}
 	if len(data) == 0 {
 		return "No data"
 	}
