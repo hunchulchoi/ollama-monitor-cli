@@ -29,20 +29,12 @@ A high-performance, real-time TUI (Terminal User Interface) dashboard for monito
 
 #### 📦 Global Installation (Easiest)
 
-You can easily install `ollama-monitor-cli` globally using either **Go** or **npm**:
+If you have Go installed on your system, you can easily install the CLI globally with a single command:
 
-##### Option A: Go Toolchain
-If you have Go installed on your system, install the CLI globally with a single command:
 ```bash
 go install github.com/hunchulchoi/ollama-monitor-cli@latest
 ```
 *Note: Make sure your `$GOPATH/bin` (or `~/go/bin`) is in your system's `PATH`.*
-
-##### Option B: npm Package Manager
-If you prefer the Node.js ecosystem, you can install it globally via npm:
-```bash
-npm install -g ollama-monitoring-cli
-```
 
 ---
 
