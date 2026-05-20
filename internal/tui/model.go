@@ -72,7 +72,7 @@ type Model struct {
 	TPSChart         linechart.Model
 }
 
-func NewModel(client *ollama.Client, debugMode bool) Model {
+func NewModel(client *ollama.Client, debugMode bool) *Model {
 	cpuChart := linechart.New(20, 8)
 	cpuChart.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("42")) // Spring Green
 
@@ -85,7 +85,7 @@ func NewModel(client *ollama.Client, debugMode bool) Model {
 	tpsChart := linechart.New(20, 8)
 	tpsChart.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("5")) // Purple
 
-	return Model{
+	return &Model{
 		client:       client,
 		DebugMode:    debugMode,
 		ProxyChan:    make(chan *ollama.LogEntry, 10),
@@ -96,7 +96,7 @@ func NewModel(client *ollama.Client, debugMode bool) Model {
 	}
 }
 
-func (m Model) waitForProxyMetrics() tea.Cmd {
+func (m *Model) waitForProxyMetrics() tea.Cmd {
 	return func() tea.Msg {
 		entry := <-m.ProxyChan
 		if entry == nil {
@@ -106,7 +106,7 @@ func (m Model) waitForProxyMetrics() tea.Cmd {
 	}
 }
 
-func (m Model) Init() tea.Cmd {
+func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
 		doTick(),
 		m.tailLogFile("server.log", -1),
@@ -115,7 +115,7 @@ func (m Model) Init() tea.Cmd {
 	)
 }
 
-func (m Model) tailLogFile(name string, offset int64) tea.Cmd {
+func (m *Model) tailLogFile(name string, offset int64) tea.Cmd {
 	return func() tea.Msg {
 		var logPath string
 		customLogDir := os.Getenv("OLLAMA_LOG_DIR")
@@ -160,7 +160,7 @@ func (m Model) tailLogFile(name string, offset int64) tea.Cmd {
 	}
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if m.ShutdownPending {
@@ -220,7 +220,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.CPUChart.Resize(chartWidth, 8)
 		m.MemChart.Resize(chartWidth, 8)
-		m.LatencyChart.Resize(msg.Width-6, 8)
+
+		latencyWidth := msg.Width - 6
+		if latencyWidth < 10 {
+			latencyWidth = 10
+		}
+		m.LatencyChart.Resize(latencyWidth, 8)
 		m.TPSChart.Resize(chartWidth, 8)
 	case TickMsg:
 		res, err := m.client.GetRunningModels()
@@ -300,6 +305,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) handleLogEntry(entry *ollama.LogEntry) {
+	if entry == nil {
+		return
+	}
 	if entry.RequestID != "" {
 		m.Requests = append(m.Requests, entry)
 		if len(m.Requests) > 8 {
@@ -334,7 +342,7 @@ func (m *Model) handleLogEntry(entry *ollama.LogEntry) {
 	}
 }
 
-func (m Model) View() string {
+func (m *Model) View() string {
 	if m.width == 0 {
 		return "Initializing..."
 	}
@@ -372,43 +380,62 @@ func (m Model) View() string {
 		}
 	}
 
+	isFullMode := m.height >= 38
+
 	// Debug Metrics Section (Conditional)
 	var debugMetricsView string
 	if m.DebugMode {
 		debugMetricsView = HeaderStyle.Render(" 🎯 DEBUG METRICS (Tokens & Speed)") + "\n"
-		sparkWidth := (contentWidth - 16) / 2
-		if sparkWidth < 5 {
-			sparkWidth = 5
+		if isFullMode {
+			sparkWidth := (contentWidth - 16) / 2
+			if sparkWidth < 5 {
+				sparkWidth = 5
+			}
+			tokenSpark := RenderSparkline(m.EvalTokens, sparkWidth, 10.0)
+			tokenView := "  TOKENS: " + tokenSpark
+			tpsView := "   TPS:\n" + m.TPSChart.View()
+			debugMetricsView += lipgloss.JoinHorizontal(lipgloss.Top, tokenView, tpsView)
+		} else {
+			sparkWidth := (contentWidth - 16) / 2
+			if sparkWidth < 5 {
+				sparkWidth = 5
+			}
+			tokenSpark := RenderSparkline(m.EvalTokens, sparkWidth, 10.0)
+			tpsSpark := RenderSparkline(m.TPSHistory, sparkWidth, 5.0)
+			debugMetricsView += fmt.Sprintf("  TOKENS: %-*s  TPS: %-*s", sparkWidth, tokenSpark, sparkWidth, tpsSpark)
 		}
-		tokenSpark := RenderSparkline(m.EvalTokens, sparkWidth, 10.0)
-		tpsSpark := RenderSparkline(m.TPSHistory, sparkWidth, 5.0)
-
-		debugMetricsView += fmt.Sprintf("  TOKENS: %-*s  TPS: %-*s", sparkWidth, tokenSpark, sparkWidth, tpsSpark)
 	}
 
 	// Performance Section
 	performanceView := LatencyStyle.Render(" ⚡ PERFORMANCE (Latency Flow)") + "\n"
-	sparkline := RenderSparkline(m.Latencies, contentWidth-4, 1000.0) // Floor at 1s (1000ms)
-	if sparkline == "No data" {
-		performanceView += "  No data yet..."
+	if isFullMode {
+		performanceView += m.LatencyChart.View()
 	} else {
-		performanceView += "  " + sparkline
+		sparkline := RenderSparkline(m.Latencies, contentWidth-4, 1000.0) // Floor at 1s (1000ms)
+		if sparkline == "No data" {
+			performanceView += "  No data yet..."
+		} else {
+			performanceView += "  " + sparkline
+		}
 	}
 
 	// Resources Section
 	resourcesView := LatencyStyle.Render(" 📊 RESOURCE USAGE (History)") + "\n"
-
-	// Calculate dynamic width for sparklines to prevent overflow
-	// Total available = contentWidth. We have labels "  CPU: " (7) and "  MEM: " (7)
-	sparkWidth := (contentWidth - 16) / 2
-	if sparkWidth < 5 {
-		sparkWidth = 5
+	if isFullMode {
+		cpuView := "  CPU:\n" + m.CPUChart.View()
+		memView := "   MEM:\n" + m.MemChart.View()
+		resourcesView += lipgloss.JoinHorizontal(lipgloss.Top, cpuView, memView)
+	} else {
+		// Calculate dynamic width for sparklines to prevent overflow
+		// Total available = contentWidth. We have labels "  CPU: " (7) and "  MEM: " (7)
+		sparkWidth := (contentWidth - 16) / 2
+		if sparkWidth < 5 {
+			sparkWidth = 5
+		}
+		cpuSpark := RenderSparkline(m.CPUHistory, sparkWidth, 1.0)           // Floor at 1% CPU
+		memSpark := RenderSparkline(m.MemHistory, sparkWidth, 1024*1024*1024) // Floor at 1GB RAM
+		resourcesView += fmt.Sprintf("  CPU: %-*s  MEM: %-*s", sparkWidth, cpuSpark, sparkWidth, memSpark)
 	}
-
-	cpuSpark := RenderSparkline(m.CPUHistory, sparkWidth, 1.0)           // Floor at 1% CPU
-	memSpark := RenderSparkline(m.MemHistory, sparkWidth, 1024*1024*1024) // Floor at 1GB RAM
-
-	resourcesView += fmt.Sprintf("  CPU: %-*s  MEM: %-*s", sparkWidth, cpuSpark, sparkWidth, memSpark)
 
 	// Requests Section
 	requestsView := HeaderStyle.Render(" 🔄 RECENT REQUESTS") + "\n"
