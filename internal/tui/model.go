@@ -546,13 +546,17 @@ func (m *Model) View() string {
 	fixedHeight += 3 + modelsCount // Borders (2) + Header (1) + Content
 
 	if isFullMode {
-		fixedHeight += 11 // Performance (Borders 2 + Title 1 + Chart 8)
+		if m.ProxyMode {
+			fixedHeight += 11 // Performance (Borders 2 + Title 1 + Chart 8)
+		}
 		fixedHeight += 12 // Resources (Borders 2 + Title 1 + CPU: 1 + Chart 8)
 		if m.DebugMode {
 			fixedHeight += 13 // Debug Metrics (Borders 2 + Title 1 + TPS: 2 + Chart 8)
 		}
 	} else {
-		fixedHeight += 4 // Performance (Borders 2 + Title 1 + Sparkline 1)
+		if m.ProxyMode {
+			fixedHeight += 4 // Performance (Borders 2 + Title 1 + Sparkline 1)
+		}
 		fixedHeight += 4 // Resources (Borders 2 + Title 1 + Sparkline 1)
 		if m.DebugMode {
 			fixedHeight += 4 // Debug Metrics (Borders 2 + Title 1 + Sparkline 1)
@@ -588,8 +592,11 @@ func (m *Model) View() string {
 		views = append(views, m.renderDebugMetrics(boxStyle, contentWidth, isFullMode))
 	}
 
+	if m.ProxyMode {
+		views = append(views, m.renderPerformance(boxStyle, contentWidth, isFullMode))
+	}
+
 	views = append(views,
-		m.renderPerformance(boxStyle, contentWidth, isFullMode),
 		m.renderResources(boxStyle, contentWidth, isFullMode),
 		m.renderRequests(boxStyle, contentWidth, maxRequests),
 		m.renderLogs(boxStyle, contentWidth, maxLogs),
