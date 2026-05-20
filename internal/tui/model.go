@@ -11,6 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	linechart "github.com/NimbleMarkets/ntcharts/linechart/streamlinechart"
 )
 
 type TickMsg time.Time
@@ -65,13 +66,33 @@ type Model struct {
 	ShutdownActive   bool
 	ShutdownTime     time.Time
 	ShutdownDuration time.Duration
+	CPUChart         linechart.Model
+	MemChart         linechart.Model
+	LatencyChart     linechart.Model
+	TPSChart         linechart.Model
 }
 
 func NewModel(client *ollama.Client, debugMode bool) Model {
+	cpuChart := linechart.New(20, 8)
+	cpuChart.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("42")) // Spring Green
+
+	memChart := linechart.New(20, 8)
+	memChart.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("39")) // Deep Sky Blue
+
+	latencyChart := linechart.New(20, 8)
+	latencyChart.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("214")) // Orange
+
+	tpsChart := linechart.New(20, 8)
+	tpsChart.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("5")) // Purple
+
 	return Model{
-		client:    client,
-		DebugMode: debugMode,
-		ProxyChan: make(chan *ollama.LogEntry, 10),
+		client:       client,
+		DebugMode:    debugMode,
+		ProxyChan:    make(chan *ollama.LogEntry, 10),
+		CPUChart:     cpuChart,
+		MemChart:     memChart,
+		LatencyChart: latencyChart,
+		TPSChart:     tpsChart,
 	}
 }
 
