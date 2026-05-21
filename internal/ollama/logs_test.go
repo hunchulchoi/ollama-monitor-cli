@@ -94,3 +94,17 @@ func TestParseLine(t *testing.T) {
 		}
 	})
 }
+
+func TestLogEntryNetworkSizes(t *testing.T) {
+	entry := &LogEntry{
+		RequestSize:  2048,
+		ResponseSize: 4096,
+	}
+	if entry.RequestSize != 2048 {
+		t.Errorf("Expected RequestSize 2048, got %d", entry.RequestSize)
+	}
+	if entry.ResponseSize != 4096 {
+		t.Errorf("Expected ResponseSize 4096, got %d", entry.ResponseSize)
+	}
+}
+

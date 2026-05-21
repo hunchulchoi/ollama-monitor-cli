@@ -22,6 +22,8 @@ type LogEntry struct {
 	EvalDuration       time.Duration
 	TotalDuration      time.Duration
 	LoadDuration       time.Duration
+	RequestSize        int64
+	ResponseSize       int64
 }
 
 // Improved regex to handle both general logs and request logs
