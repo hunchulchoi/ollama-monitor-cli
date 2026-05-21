@@ -266,13 +266,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.CPUChart.Resize(chartWidth, 8)
 		m.MemChart.Resize(chartWidth, 8)
-
-		latencyWidth := msg.Width - 6
-		if latencyWidth < 10 {
-			latencyWidth = 10
-		}
-		m.LatencyChart.Resize(latencyWidth, 8)
 		m.TPSChart.Resize(chartWidth, 8)
+
+		thirdWidth := (msg.Width - 12) / 3
+		if thirdWidth < 10 {
+			thirdWidth = 10
+		}
+		m.LatencyChart.Resize(thirdWidth, 8)
+		m.UploadChart.Resize(thirdWidth, 8)
+		m.DownloadChart.Resize(thirdWidth, 8)
 	case TickMsg:
 		res, err := m.client.GetRunningModels()
 		if err == nil {
@@ -363,6 +365,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.DownloadSpeed = float64(m.downloadTemp)
 		m.TotalUpload += m.uploadTemp
 		m.TotalDownload += m.downloadTemp
+
+		upKB := m.UploadSpeed / 1024.0
+		downKB := m.DownloadSpeed / 1024.0
+
+		m.UploadChart.Push(upKB)
+		m.DownloadChart.Push(downKB)
+
+		m.UploadHistory = append(m.UploadHistory, upKB)
+		m.DownloadHistory = append(m.DownloadHistory, downKB)
+
+		if len(m.UploadHistory) > 50 {
+			m.UploadHistory = m.UploadHistory[1:]
+		}
+		if len(m.DownloadHistory) > 50 {
+			m.DownloadHistory = m.DownloadHistory[1:]
+		}
+
 		m.uploadTemp = 0
 		m.downloadTemp = 0
 		return m, doBandwidthTick()

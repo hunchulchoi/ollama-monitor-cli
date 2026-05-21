@@ -346,3 +346,25 @@ func TestNetworkChartsInitialization(t *testing.T) {
 	}
 }
 
+func TestNetworkChartsIngestionAndResize(t *testing.T) {
+	m := NewModel(nil, true)
+	m.uploadTemp = 1024 * 5   // 5 KB
+	m.downloadTemp = 1024 * 10 // 10 KB
+
+	// 1. Simulate bandwidth tick
+	_, _ = m.Update(BandwidthTickMsg(time.Now()))
+	
+	if len(m.UploadHistory) != 1 || m.UploadHistory[0] != 5.0 {
+		t.Errorf("Expected UploadHistory to have [5.0], got: %v", m.UploadHistory)
+	}
+	if len(m.DownloadHistory) != 1 || m.DownloadHistory[0] != 10.0 {
+		t.Errorf("Expected DownloadHistory to have [10.0], got: %v", m.DownloadHistory)
+	}
+
+	// 2. Simulate resize event
+	_, _ = m.Update(tea.WindowSizeMsg{Width: 96, Height: 40})
+	
+	// Layout calculations are correct and cause no panics.
+}
+
+
