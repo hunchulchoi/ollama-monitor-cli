@@ -219,6 +219,35 @@ func TestRenderResources(t *testing.T) {
 	}
 }
 
+func TestRenderRequests(t *testing.T) {
+	model := NewModel(nil, true)
+	model.Requests = []*ollama.LogEntry{
+		{
+			RequestID:    "xyz987",
+			Time:         time.Now(),
+			Method:       "GET",
+			Path:         "/api/tags",
+			Status:       "200",
+			ResponseTime: 45 * time.Millisecond,
+		},
+	}
+	rendered := model.renderRequests(lipgloss.NewStyle(), 80, 5)
+	
+	expectedTitle := "RECENT REQUESTS"
+	expectedPath := "/api/tags"
+	expectedStatus := "200"
+	if !strings.Contains(rendered, expectedTitle) {
+		t.Errorf("Expected requests view to contain '%s', got: %s", expectedTitle, rendered)
+	}
+	if !strings.Contains(rendered, expectedPath) {
+		t.Errorf("Expected requests view to contain '%s', got: %s", expectedPath, rendered)
+	}
+	if !strings.Contains(rendered, expectedStatus) {
+		t.Errorf("Expected requests view to contain '%s', got: %s", expectedStatus, rendered)
+	}
+}
+
+
 
 
 
