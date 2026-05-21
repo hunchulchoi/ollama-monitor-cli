@@ -272,6 +272,18 @@ func TestRenderLogs(t *testing.T) {
 	}
 }
 
+func TestRenderFooter(t *testing.T) {
+	model := NewModel(nil, true)
+	model.ShutdownActive = true
+	
+	rendered := model.renderFooter()
+	
+	expectedText := "Shutdown Timer Active"
+	if !strings.Contains(rendered, expectedText) {
+		t.Errorf("Expected footer to contain '%s', got: %s", expectedText, rendered)
+	}
+}
+
 
 
 
