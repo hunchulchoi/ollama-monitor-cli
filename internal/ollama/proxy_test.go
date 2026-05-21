@@ -1,7 +1,10 @@
 package ollama
 
 import (
+	"bytes"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -46,3 +49,46 @@ func TestProxyMetricsUnmarshal(t *testing.T) {
 		t.Errorf("Expected total_duration 7.012s, got %v", metrics.TotalDuration)
 	}
 }
+
+func TestProxyByteMeasurement(t *testing.T) {
+	// 1. Create dummy target server
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("response-body-12345")) // 19 bytes response body
+	}))
+	defer target.Close()
+
+	metricsOut := make(chan *LogEntry, 10)
+	proxy, err := NewProxyServer(target.URL, metricsOut)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Mock request
+	req := httptest.NewRequest("POST", "/api/tags", bytes.NewBuffer([]byte("req-body-123"))) // 12 bytes request body
+	req.Header.Set("X-Request-ID", "test-network-id")
+	rec := httptest.NewRecorder()
+
+	// 3. Directly call ServeHTTP to trigger traffic measurement handler
+	proxy.ServeHTTP(rec, req)
+
+	// 4. Verify metric sent to channel
+	select {
+	case entry := <-metricsOut:
+		if entry.RequestID != "test-network-id" {
+			t.Errorf("Expected RequestID 'test-network-id', got '%s'", entry.RequestID)
+		}
+		if entry.RequestSize <= 12 {
+			t.Errorf("Expected RequestSize > 12 (body + header), got %d", entry.RequestSize)
+		}
+		if entry.ResponseSize <= 19 {
+			t.Errorf("Expected ResponseSize > 19 (body + header), got %d", entry.ResponseSize)
+		}
+		if entry.Level != "METRIC" {
+			t.Errorf("Expected Level 'METRIC', got '%s'", entry.Level)
+		}
+	default:
+		t.Fatal("Expected LogEntry in metricsOut channel, but timed out")
+	}
+}
+
