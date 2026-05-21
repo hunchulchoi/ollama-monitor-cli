@@ -313,3 +313,25 @@ func TestTUIBandwidthAccumulator(t *testing.T) {
 		t.Errorf("Expected temp buffers to be reset, got %d/%d", m.uploadTemp, m.downloadTemp)
 	}
 }
+
+func TestRenderHeaderNetworkMetrics(t *testing.T) {
+	client := ollama.NewClient("http://localhost:11434")
+	m := NewModel(client, false)
+	m.ProxyMode = true
+	m.UploadSpeed = 1024
+	m.DownloadSpeed = 2048 * 1024
+	m.TotalUpload = 4096
+	m.TotalDownload = 8192 * 1024
+
+	output := m.renderHeader()
+
+	if !strings.Contains(output, "🛜") {
+		t.Errorf("Expected header to contain network emoji 🛜, got: %s", output)
+	}
+	if !strings.Contains(output, "1.0 KB/s") {
+		t.Errorf("Expected header to contain upload speed, got: %s", output)
+	}
+	if !strings.Contains(output, "2.0 MB/s") {
+		t.Errorf("Expected header to contain download speed, got: %s", output)
+	}
+}

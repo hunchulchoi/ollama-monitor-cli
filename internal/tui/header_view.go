@@ -16,7 +16,21 @@ func (m *Model) renderHeader() string {
 		header += " | " + ErrorStyle.Bold(true).Render("DEBUG ON")
 	}
 	if m.ProxyMode {
-		header += " | " + ErrorStyle.Bold(true).Foreground(lipgloss.Color("13")).Render("PROXY ON (Point Client to port 11435)")
+		// Define custom colors for network metrics
+		upColor := lipgloss.NewStyle().Foreground(lipgloss.Color("208"))   // Orange Accent
+		downColor := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))  // Sky Blue Accent
+		grayColor := lipgloss.NewStyle().Foreground(lipgloss.Color("244")) // Muted Gray for totals
+
+		upSpeedStr := FormatBytes(m.UploadSpeed) + "/s"
+		downSpeedStr := FormatBytes(m.DownloadSpeed) + "/s"
+		upTotalStr := FormatBytes(float64(m.TotalUpload))
+		downTotalStr := FormatBytes(float64(m.TotalDownload))
+
+		networkPart := fmt.Sprintf(" | 🛜  %s %s %s | %s %s %s",
+			upColor.Render("▲"), upSpeedStr, grayColor.Render("("+upTotalStr+")"),
+			downColor.Render("▼"), downSpeedStr, grayColor.Render("("+downTotalStr+")"),
+		)
+		header += networkPart
 	}
 	if m.ShutdownActive {
 		minutes := int(m.ShutdownDuration.Minutes())
