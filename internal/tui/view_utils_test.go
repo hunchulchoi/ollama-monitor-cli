@@ -33,3 +33,24 @@ func TestRenderSparkline(t *testing.T) {
 		}
 	})
 }
+
+func TestFormatBytes(t *testing.T) {
+	tests := []struct {
+		input    float64
+		expected string
+	}{
+		{500, "500 B"},
+		{1024, "1.0 KB"},
+		{1048576, "1.0 MB"},
+		{1073741824, "1.0 GB"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.expected, func(t *testing.T) {
+			res := FormatBytes(tc.input)
+			if res != tc.expected {
+				t.Errorf("Expected '%s', got '%s'", tc.expected, res)
+			}
+		})
+	}
+}

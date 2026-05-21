@@ -1,6 +1,9 @@
 package tui
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 func RenderSparkline(data []float64, width int, minMax float64) string {
 	if width <= 0 {
@@ -41,3 +44,17 @@ func RenderSparkline(data []float64, width int, minMax float64) string {
 	}
 	return sb.String()
 }
+
+func FormatBytes(b float64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%.0f B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", b/float64(div), "KMGTPE"[exp])
+}
+
