@@ -18,6 +18,22 @@ A high-performance, real-time TUI (Terminal User Interface) dashboard for monito
 - **🔄 Request Tracker:** Detailed table of recent API requests with IDs, methods, paths, and statuses.
 - **📱 Responsive Layout:** Automatically adjusts UI components and chart bounds dynamically based on your terminal window size.
 
+## 🔒 Privacy & Security First (보안 및 개인정보 보호)
+
+This application is built with a **Security-First** philosophy:
+- **100% Local & Confidential**: We **never** collect, store, or transmit your API keys, prompts, or network traffic to any external server. Everything stays entirely on your local machine.
+- **No External Analytics / Telemetry**: All data telemetry, GPU/CPU usage monitoring, and network speed computations are executed strictly in-memory.
+- **Fail-Safe & Secure**: Complete offline functionality with zero external dependencies communicating out.
+
+## 🔄 Recent Updates (최근 업데이트 사항)
+
+We have recently upgraded the codebase to be much more robust, modular, and feature-rich:
+
+1. **🏗️ SOLID Architectural Refactoring**: Distributed the monolithic TUI layout logic into isolated, single-responsibility rendering views (`header`, `models`, `debug`, `performance`, `resources`, `requests`, `logs`, `footer`). Fully guarded by unit tests ensuring 0% layout panics.
+2. **🛜 Real-Time Network Bandwidth & Stats**: Extended the built-in proxy to measure exact HTTP upload/download byte sizes (headers + body sizes) on all endpoints. Added real-time speed rates (B/s, KB/s, MB/s) and accumulated lifetime stats shown in the header using soft-colored Lip Gloss styles.
+3. **⚙️ Resilient Fail-Safe Telemetry**: Handled floating-point infinity (`+Inf`, `-Inf`) and `NaN` edge cases in metric formatters to ensure zero TUI lockups or index panics.
+4. **🚀 Interactive Auto-Startup**: The CLI now checks if the local Ollama daemon is running on startup. If inactive, it alerts you and displays a safe, interactive command-line prompt to spin it up automatically.
+
 ## 🚀 Quick Start
 
 ### Prerequisites
