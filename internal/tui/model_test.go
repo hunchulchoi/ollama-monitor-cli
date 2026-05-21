@@ -154,3 +154,27 @@ func TestRenderHeader(t *testing.T) {
 	}
 }
 
+func TestRenderRunningModels(t *testing.T) {
+	model := NewModel(nil, true)
+	model.RunningModels = []RunningModelInfo{
+		{
+			Name:          "phi3:latest",
+			Size:          "2.2GB",
+			VRAM:          "100%",
+			ContextLength: "4k",
+			TTL:           "[8m]",
+		},
+	}
+	rendered := model.renderRunningModels(lipgloss.NewStyle(), 80)
+	
+	expectedName := "phi3:latest"
+	expectedSize := "2.2GB"
+	if !strings.Contains(rendered, expectedName) {
+		t.Errorf("Expected running models to contain '%s', got: %s", expectedName, rendered)
+	}
+	if !strings.Contains(rendered, expectedSize) {
+		t.Errorf("Expected running models to contain '%s', got: %s", expectedSize, rendered)
+	}
+}
+
+
