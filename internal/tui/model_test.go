@@ -284,7 +284,32 @@ func TestRenderFooter(t *testing.T) {
 	}
 }
 
+func TestTUIBandwidthAccumulator(t *testing.T) {
+	client := ollama.NewClient("http://localhost:11434")
+	m := NewModel(client, false)
 
+	// 1. Ingest dummy LogEntry with network sizes
+	entry := &ollama.LogEntry{
+		Level:        "METRIC",
+		RequestSize:  1500,
+		ResponseSize: 3000,
+	}
+	m.handleLogEntry(entry)
 
+	if m.uploadTemp != 1500 || m.downloadTemp != 3000 {
+		t.Errorf("Expected temp buffers 1500/3000, got %d/%d", m.uploadTemp, m.downloadTemp)
+	}
 
+	// 2. Perform tick update simulation
+	_, _ = m.Update(BandwidthTickMsg(time.Now()))
 
+	if m.UploadSpeed != 1500 || m.DownloadSpeed != 3000 {
+		t.Errorf("Expected speeds 1500/3000, got %f/%f", m.UploadSpeed, m.DownloadSpeed)
+	}
+	if m.TotalUpload != 1500 || m.TotalDownload != 3000 {
+		t.Errorf("Expected totals 1500/3000, got %d/%d", m.TotalUpload, m.TotalDownload)
+	}
+	if m.uploadTemp != 0 || m.downloadTemp != 0 {
+		t.Errorf("Expected temp buffers to be reset, got %d/%d", m.uploadTemp, m.downloadTemp)
+	}
+}

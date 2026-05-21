@@ -10,6 +10,12 @@ type Client struct {
 	APIKey  string
 }
 
+func NewClient(baseURL string) *Client {
+	return &Client{
+		BaseURL: baseURL,
+	}
+}
+
 type ModelPSResponse struct {
 	Models []struct {
 		Name string `json:"name"`

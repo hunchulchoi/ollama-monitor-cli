@@ -35,6 +35,14 @@ func doShutdownTick() tea.Cmd {
 	})
 }
 
+type BandwidthTickMsg time.Time
+
+func doBandwidthTick() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return BandwidthTickMsg(t)
+	})
+}
+
 type RunningModelInfo struct {
 	Name          string
 	Size          string
@@ -72,6 +80,12 @@ type Model struct {
 	LatencyChart     linechart.Model
 	TPSChart         linechart.Model
 	APIError         error
+	TotalUpload      int64
+	TotalDownload    int64
+	UploadSpeed      float64
+	DownloadSpeed    float64
+	uploadTemp       int64
+	downloadTemp     int64
 }
 
 func NewModel(client *ollama.Client, debugMode bool) *Model {
@@ -111,6 +125,7 @@ func (m *Model) waitForProxyMetrics() tea.Cmd {
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
 		doTick(),
+		doBandwidthTick(),
 		m.tailLogFile("server.log", -1),
 		m.tailLogFile("app.log", -1),
 		m.waitForProxyMetrics(),
@@ -331,6 +346,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.handleLogEntry((*ollama.LogEntry)(msg))
 		}
 		return m, m.waitForProxyMetrics()
+	case BandwidthTickMsg:
+		m.UploadSpeed = float64(m.uploadTemp)
+		m.DownloadSpeed = float64(m.downloadTemp)
+		m.TotalUpload += m.uploadTemp
+		m.TotalDownload += m.downloadTemp
+		m.uploadTemp = 0
+		m.downloadTemp = 0
+		return m, doBandwidthTick()
 	}
 	return m, nil
 }
@@ -338,6 +361,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) handleLogEntry(entry *ollama.LogEntry) {
 	if entry == nil {
 		return
+	}
+
+	if entry.RequestSize > 0 {
+		m.uploadTemp += entry.RequestSize
+	}
+	if entry.ResponseSize > 0 {
+		m.downloadTemp += entry.ResponseSize
 	}
 
 	// 1. Log list routing
