@@ -335,3 +335,14 @@ func TestRenderHeaderNetworkMetrics(t *testing.T) {
 		t.Errorf("Expected header to contain download speed, got: %s", output)
 	}
 }
+
+func TestNetworkChartsInitialization(t *testing.T) {
+	m := NewModel(nil, true)
+	if m.UploadChart.Style.GetForeground() == lipgloss.Color("") {
+		t.Error("Expected UploadChart style to be initialized with a foreground color")
+	}
+	if m.DownloadChart.Style.GetForeground() == lipgloss.Color("") {
+		t.Error("Expected DownloadChart style to be initialized with a foreground color")
+	}
+}
+

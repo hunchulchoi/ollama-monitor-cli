@@ -79,6 +79,10 @@ type Model struct {
 	MemChart         linechart.Model
 	LatencyChart     linechart.Model
 	TPSChart         linechart.Model
+	UploadChart      linechart.Model
+	DownloadChart    linechart.Model
+	UploadHistory    []float64
+	DownloadHistory  []float64
 	APIError         error
 	TotalUpload      int64
 	TotalDownload    int64
@@ -101,14 +105,22 @@ func NewModel(client *ollama.Client, debugMode bool) *Model {
 	tpsChart := linechart.New(20, 8)
 	tpsChart.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("5")) // Purple
 
+	uploadChart := linechart.New(20, 8)
+	uploadChart.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("170")) // Purple/Magenta
+
+	downloadChart := linechart.New(20, 8)
+	downloadChart.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("51")) // Bright Cyan
+
 	return &Model{
-		client:       client,
-		DebugMode:    debugMode,
-		ProxyChan:    make(chan *ollama.LogEntry, 10),
-		CPUChart:     cpuChart,
-		MemChart:     memChart,
-		LatencyChart: latencyChart,
-		TPSChart:     tpsChart,
+		client:        client,
+		DebugMode:     debugMode,
+		ProxyChan:     make(chan *ollama.LogEntry, 10),
+		CPUChart:      cpuChart,
+		MemChart:      memChart,
+		LatencyChart:  latencyChart,
+		TPSChart:      tpsChart,
+		UploadChart:   uploadChart,
+		DownloadChart: downloadChart,
 	}
 }
 
