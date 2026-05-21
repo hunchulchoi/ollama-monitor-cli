@@ -198,5 +198,27 @@ func TestRenderDebugMetrics(t *testing.T) {
 	}
 }
 
+func TestRenderResources(t *testing.T) {
+	model := NewModel(nil, true)
+	model.CPUHistory = []float64{2.5, 4.0}
+	model.MemHistory = []float64{1024 * 1024 * 1024, 2 * 1024 * 1024 * 1024}
+	
+	rendered := model.renderResources(lipgloss.NewStyle(), 80, false)
+	
+	expectedTitle := "RESOURCE USAGE"
+	expectedCPU := "CPU:"
+	expectedMEM := "MEM:"
+	if !strings.Contains(rendered, expectedTitle) {
+		t.Errorf("Expected resources to contain '%s', got: %s", expectedTitle, rendered)
+	}
+	if !strings.Contains(rendered, expectedCPU) {
+		t.Errorf("Expected resources to contain '%s', got: %s", expectedCPU, rendered)
+	}
+	if !strings.Contains(rendered, expectedMEM) {
+		t.Errorf("Expected resources to contain '%s', got: %s", expectedMEM, rendered)
+	}
+}
+
+
 
 
