@@ -6,6 +6,8 @@ import (
 	"github.com/hunchulchoi/ollama-monitor-cli/internal/ollama"
 	"github.com/hunchulchoi/ollama-monitor-cli/internal/tui"
 	"os"
+	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/joho/godotenv"
@@ -56,6 +58,26 @@ func main() {
 	// If logDir is provided via flag or env, set it in the environment so tui package can pick it up
 	if logDir != "" {
 		os.Setenv("OLLAMA_LOG_DIR", logDir)
+	}
+
+	// If the Ollama API URL is pointing to localhost/127.0.0.1, check if Ollama is running on port 11434.
+	// If not, ask the user if they want to start it.
+	isLocalhost := strings.Contains(apiURL, "127.0.0.1") || strings.Contains(apiURL, "localhost")
+	if isLocalhost && !ollama.IsPortInUse(11434) {
+		fmt.Println("\033[33m⚠️  Ollama is not running on localhost:11434.\033[0m")
+		fmt.Print("Would you like to start the Ollama service? [Y/n]: ")
+		var answer string
+		fmt.Scanln(&answer)
+		answer = strings.TrimSpace(strings.ToLower(answer))
+		if answer == "" || answer == "y" || answer == "yes" {
+			fmt.Println("Starting Ollama service...")
+			if err := ollama.RestartOllama(debugMode); err != nil {
+				fmt.Printf("\033[31mError: Could not start Ollama: %v\033[0m\n", err)
+			} else {
+				fmt.Println("\033[32m✔ Ollama service started successfully!\033[0m")
+				time.Sleep(1500 * time.Millisecond) // wait a brief moment for it to initialize
+			}
+		}
 	}
 
 	client := &ollama.Client{

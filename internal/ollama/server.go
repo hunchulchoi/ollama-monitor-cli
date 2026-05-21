@@ -93,7 +93,7 @@ func KillOllama() error {
 
 	// Wait up to 5 seconds for the port to actually clear
 	for i := 0; i < 10; i++ {
-		if !isPortInUse(11434) {
+		if !IsPortInUse(11434) {
 			return nil
 		}
 		time.Sleep(500 * time.Millisecond)
@@ -102,7 +102,7 @@ func KillOllama() error {
 	return fmt.Errorf("port 11434 is still in use after kill attempts")
 }
 
-func isPortInUse(port int) bool {
+func IsPortInUse(port int) bool {
 	// Simple check by trying to listen on the port
 	// but since we are a CLI, it's easier to check via netstat/lsof for robustness
 	var cmd *exec.Cmd
