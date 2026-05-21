@@ -84,22 +84,36 @@ func TestRenderPerformance(t *testing.T) {
 			TotalDuration:   3500 * time.Millisecond,
 		},
 	}
+	model.UploadSpeed = 1024 * 128 // 128 KB/s
+	model.DownloadSpeed = 1024 * 1024 * 4 // 4 MB/s
+	model.TotalUpload = 1024 * 512 // 512 KB
+	model.TotalDownload = 1024 * 1024 * 20 // 20 MB
 
 	boxStyle := lipgloss.NewStyle()
-	rendered := model.renderPerformance(boxStyle, 80, true)
+	renderedFull := model.renderPerformance(boxStyle, 80, true)
 
 	expectedPrompt := "Prompt: 50"
 	expectedResponse := "Response: 150"
-	expectedDuration := "Duration: 3.5s"
+	expectedDuration := "Latency: 3.5s" // Updated text
+	expectedTitle := "NETWORK & PERFORMANCE"
 
-	if !strings.Contains(rendered, expectedPrompt) {
-		t.Errorf("Expected performance rendering to contain '%s', got: %s", expectedPrompt, rendered)
+	if !strings.Contains(renderedFull, expectedPrompt) {
+		t.Errorf("Expected performance rendering to contain '%s', got: %s", expectedPrompt, renderedFull)
 	}
-	if !strings.Contains(rendered, expectedResponse) {
-		t.Errorf("Expected performance rendering to contain '%s', got: %s", expectedResponse, rendered)
+	if !strings.Contains(renderedFull, expectedResponse) {
+		t.Errorf("Expected performance rendering to contain '%s', got: %s", expectedResponse, renderedFull)
 	}
-	if !strings.Contains(rendered, expectedDuration) {
-		t.Errorf("Expected performance rendering to contain '%s', got: %s", expectedDuration, rendered)
+	if !strings.Contains(renderedFull, expectedDuration) {
+		t.Errorf("Expected performance rendering to contain '%s', got: %s", expectedDuration, renderedFull)
+	}
+	if !strings.Contains(renderedFull, expectedTitle) {
+		t.Errorf("Expected performance rendering to contain title '%s', got: %s", expectedTitle, renderedFull)
+	}
+
+	// Compact mode assertions
+	renderedCompact := model.renderPerformance(boxStyle, 80, false)
+	if !strings.Contains(renderedCompact, "Upload:") || !strings.Contains(renderedCompact, "Download:") {
+		t.Errorf("Expected compact rendering to contain 'Upload:' and 'Download:', got:\n%s", renderedCompact)
 	}
 }
 
