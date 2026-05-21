@@ -135,3 +135,22 @@ func TestRestartOllamaConfirm(t *testing.T) {
 		t.Error("Expected RestartPending to be cleared to false after pressing 'n' (any other key)")
 	}
 }
+
+func TestRenderHeader(t *testing.T) {
+	model := NewModel(nil, true)
+	model.Stats = &ollama.ProcessStats{
+		CPU:    45.2,
+		Memory: 2 * 1024 * 1024 * 1024,
+	}
+	rendered := model.renderHeader()
+	
+	expectedTitle := "🦙 OLLAMA MONITOR"
+	expectedStats := "CPU: 45.2% | MEM: 2.0GB"
+	if !strings.Contains(rendered, expectedTitle) {
+		t.Errorf("Expected header to contain '%s', got: %s", expectedTitle, rendered)
+	}
+	if !strings.Contains(rendered, expectedStats) {
+		t.Errorf("Expected header to contain '%s', got: %s", expectedStats, rendered)
+	}
+}
+
