@@ -1,6 +1,9 @@
 package tui
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestRenderSparkline(t *testing.T) {
 	t.Run("Empty Data", func(t *testing.T) {
@@ -43,6 +46,15 @@ func TestFormatBytes(t *testing.T) {
 		{1024, "1.0 KB"},
 		{1048576, "1.0 MB"},
 		{1073741824, "1.0 GB"},
+		{0, "0 B"},
+		{-500, "-500 B"},
+		{-1024, "-1.0 KB"},
+		{-1048576, "-1.0 MB"},
+		{math.Inf(1), "+Inf B"},
+		{math.Inf(-1), "-Inf B"},
+		{math.NaN(), "NaN B"},
+		{1.2089258196146292e+24, "1.0 YB"},
+		{1.2379400392853803e+26, "102.4 YB"},
 	}
 
 	for _, tc := range tests {

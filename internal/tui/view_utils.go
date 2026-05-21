@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -46,15 +47,36 @@ func RenderSparkline(data []float64, width int, minMax float64) string {
 }
 
 func FormatBytes(b float64) string {
-	const unit = 1024
-	if b < unit {
-		return fmt.Sprintf("%.0f B", b)
+	if math.IsNaN(b) {
+		return "NaN B"
 	}
-	div, exp := int64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
+	if math.IsInf(b, 1) {
+		return "+Inf B"
+	}
+	if math.IsInf(b, -1) {
+		return "-Inf B"
+	}
+
+	sign := ""
+	if b < 0 {
+		sign = "-"
+		b = math.Abs(b)
+	}
+
+	const unit = 1024.0
+	if b < unit {
+		return fmt.Sprintf("%s%.0f B", sign, b)
+	}
+
+	suffixes := []string{"KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"}
+
+	div := unit
+	exp := 0
+	for n := b / unit; n >= unit && exp < len(suffixes)-1; n /= unit {
 		div *= unit
 		exp++
 	}
-	return fmt.Sprintf("%.1f %cB", b/float64(div), "KMGTPE"[exp])
+
+	return fmt.Sprintf("%s%.1f %s", sign, b/div, suffixes[exp])
 }
 
