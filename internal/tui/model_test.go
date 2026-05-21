@@ -177,4 +177,26 @@ func TestRenderRunningModels(t *testing.T) {
 	}
 }
 
+func TestRenderDebugMetrics(t *testing.T) {
+	model := NewModel(nil, true)
+	model.EvalTokens = []float64{10, 20, 30}
+	model.TPSHistory = []float64{15.5, 20.0}
+	
+	rendered := model.renderDebugMetrics(lipgloss.NewStyle(), 80, false)
+	
+	expectedTitle := "DEBUG METRICS"
+	expectedTokens := "TOKENS:"
+	expectedTPS := "TPS:"
+	if !strings.Contains(rendered, expectedTitle) {
+		t.Errorf("Expected debug metrics to contain '%s', got: %s", expectedTitle, rendered)
+	}
+	if !strings.Contains(rendered, expectedTokens) {
+		t.Errorf("Expected debug metrics to contain '%s', got: %s", expectedTokens, rendered)
+	}
+	if !strings.Contains(rendered, expectedTPS) {
+		t.Errorf("Expected debug metrics to contain '%s', got: %s", expectedTPS, rendered)
+	}
+}
+
+
 
