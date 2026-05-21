@@ -247,6 +247,31 @@ func TestRenderRequests(t *testing.T) {
 	}
 }
 
+func TestRenderLogs(t *testing.T) {
+	model := NewModel(nil, true)
+	model.Logs = []*ollama.LogEntry{
+		{
+			Time:  time.Now(),
+			Level: "ERROR",
+			Msg:   "Connection to database failed",
+		},
+	}
+	rendered := model.renderLogs(lipgloss.NewStyle(), 80, 5)
+	
+	expectedTitle := "SERVER LOGS"
+	expectedLevel := "ERROR"
+	expectedMsg := "Connection to database failed"
+	if !strings.Contains(rendered, expectedTitle) {
+		t.Errorf("Expected logs view to contain '%s', got: %s", expectedTitle, rendered)
+	}
+	if !strings.Contains(rendered, expectedLevel) {
+		t.Errorf("Expected logs view to contain '%s', got: %s", expectedLevel, rendered)
+	}
+	if !strings.Contains(rendered, expectedMsg) {
+		t.Errorf("Expected logs view to contain '%s', got: %s", expectedMsg, rendered)
+	}
+}
+
 
 
 
